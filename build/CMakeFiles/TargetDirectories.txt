@@ -1,0 +1,4 @@
+/Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles/MetalShaders.dir
+/Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles/RayTracer.dir
+/Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles/edit_cache.dir
+/Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles/rebuild_cache.dir
