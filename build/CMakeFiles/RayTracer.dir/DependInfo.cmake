@@ -8,6 +8,8 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  "/Users/johnbeatty/Documents/Projects/metal_ray_tracer/src/AppDelegate.m" "CMakeFiles/RayTracer.dir/src/AppDelegate.m.o" "gcc" "CMakeFiles/RayTracer.dir/src/AppDelegate.m.o.d"
+  "/Users/johnbeatty/Documents/Projects/metal_ray_tracer/src/Renderer.m" "CMakeFiles/RayTracer.dir/src/Renderer.m.o" "gcc" "CMakeFiles/RayTracer.dir/src/Renderer.m.o.d"
   "/Users/johnbeatty/Documents/Projects/metal_ray_tracer/src/main.m" "CMakeFiles/RayTracer.dir/src/main.m.o" "gcc" "CMakeFiles/RayTracer.dir/src/main.m.o.d"
   )
 

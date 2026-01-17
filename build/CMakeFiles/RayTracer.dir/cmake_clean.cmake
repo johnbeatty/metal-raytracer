@@ -1,7 +1,11 @@
 file(REMOVE_RECURSE
+  "CMakeFiles/RayTracer.dir/src/AppDelegate.m.o"
+  "CMakeFiles/RayTracer.dir/src/AppDelegate.m.o.d"
+  "CMakeFiles/RayTracer.dir/src/Renderer.m.o"
+  "CMakeFiles/RayTracer.dir/src/Renderer.m.o.d"
   "CMakeFiles/RayTracer.dir/src/main.m.o"
   "CMakeFiles/RayTracer.dir/src/main.m.o.d"
-  "RayTracer"
+  "RayTracer.app/Contents/MacOS/RayTracer"
   "RayTracer.pdb"
 )
 

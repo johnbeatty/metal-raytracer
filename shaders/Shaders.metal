@@ -3,7 +3,52 @@
 
 using namespace metal;
 
-// Chapter 1: Basic Tuple Operations
+// ---------------------------
+// Structs for Vertex Shader
+// ---------------------------
+struct RasterizerData
+{
+    // The [[position]] attribute of this member indicates that this value
+    // is the clip space position of the vertex when this structure is
+    // returned from the vertex function.
+    float4 position [[position]];
+
+    // Since this member does not have a special attribute, the rasterizer
+    // will interpolate its value with the values of the other triangle vertices
+    // and then pass the interpolated value to the fragment shader for each
+    // fragment in the triangle.
+    float2 textureCoordinate;
+};
+
+// ---------------------------
+// Vertex Shader
+// ---------------------------
+vertex RasterizerData
+vertexShader(uint vertexID [[vertex_id]],
+             constant Vertex *vertices [[buffer(0)]])
+{
+    RasterizerData out;
+    
+    out.position = vertices[vertexID].position;
+    out.textureCoordinate = vertices[vertexID].textureCoordinate;
+    
+    return out;
+}
+
+// ---------------------------
+// Fragment Shader
+// ---------------------------
+fragment float4 fragmentShader(RasterizerData in [[stage_in]])
+{
+    // Just return a static color for now to verify the pipeline works
+    // We'll hook up a texture later
+    return float4(in.textureCoordinate.x, in.textureCoordinate.y, 0.0, 1.0);
+}
+
+
+// ---------------------------
+// Existing Tuple Operations (Compute)
+// ---------------------------
 
 kernel void tuple_add(device const Tuple* a [[ buffer(0) ]],
                       device const Tuple* b [[ buffer(1) ]],
@@ -71,8 +116,6 @@ kernel void vector_cross(device const Tuple* a [[ buffer(0) ]],
                          device Tuple* result [[ buffer(2) ]],
                          uint index [[ thread_position_in_grid ]])
 {
-    // Cross product is only defined for 3-component vectors.
-    // We ignore w component or treat it as 0 for direction.
     float3 a3 = a[index].components.xyz;
     float3 b3 = b[index].components.xyz;
     result[index].components = float4(cross(a3, b3), 0.0);

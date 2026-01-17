@@ -142,6 +142,22 @@ RayTracer/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/RayTracer.dir/build.make CMakeFiles/RayTracer.dir/build
 .PHONY : RayTracer/fast
 
+src/AppDelegate.o: src/AppDelegate.m.o
+.PHONY : src/AppDelegate.o
+
+# target to build an object file
+src/AppDelegate.m.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/RayTracer.dir/build.make CMakeFiles/RayTracer.dir/src/AppDelegate.m.o
+.PHONY : src/AppDelegate.m.o
+
+src/Renderer.o: src/Renderer.m.o
+.PHONY : src/Renderer.o
+
+# target to build an object file
+src/Renderer.m.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/RayTracer.dir/build.make CMakeFiles/RayTracer.dir/src/Renderer.m.o
+.PHONY : src/Renderer.m.o
+
 src/main.o: src/main.m.o
 .PHONY : src/main.o
 
@@ -160,6 +176,8 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... MetalShaders"
 	@echo "... RayTracer"
+	@echo "... src/AppDelegate.o"
+	@echo "... src/Renderer.o"
 	@echo "... src/main.o"
 .PHONY : help
 

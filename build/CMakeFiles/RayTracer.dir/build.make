@@ -86,22 +86,55 @@ CMakeFiles/RayTracer.dir/src/main.m.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling OBJC source to assembly CMakeFiles/RayTracer.dir/src/main.m.s"
 	/usr/bin/clang $(OBJC_DEFINES) $(OBJC_INCLUDES) $(OBJC_FLAGS) -S /Users/johnbeatty/Documents/Projects/metal_ray_tracer/src/main.m -o CMakeFiles/RayTracer.dir/src/main.m.s
 
+CMakeFiles/RayTracer.dir/src/AppDelegate.m.o: CMakeFiles/RayTracer.dir/flags.make
+CMakeFiles/RayTracer.dir/src/AppDelegate.m.o: /Users/johnbeatty/Documents/Projects/metal_ray_tracer/src/AppDelegate.m
+CMakeFiles/RayTracer.dir/src/AppDelegate.m.o: CMakeFiles/RayTracer.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building OBJC object CMakeFiles/RayTracer.dir/src/AppDelegate.m.o"
+	/usr/bin/clang $(OBJC_DEFINES) $(OBJC_INCLUDES) -x objective-c $(OBJC_FLAGS) -MD -MT CMakeFiles/RayTracer.dir/src/AppDelegate.m.o -MF CMakeFiles/RayTracer.dir/src/AppDelegate.m.o.d -o CMakeFiles/RayTracer.dir/src/AppDelegate.m.o -c /Users/johnbeatty/Documents/Projects/metal_ray_tracer/src/AppDelegate.m
+
+CMakeFiles/RayTracer.dir/src/AppDelegate.m.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing OBJC source to CMakeFiles/RayTracer.dir/src/AppDelegate.m.i"
+	/usr/bin/clang $(OBJC_DEFINES) $(OBJC_INCLUDES) $(OBJC_FLAGS) -E /Users/johnbeatty/Documents/Projects/metal_ray_tracer/src/AppDelegate.m > CMakeFiles/RayTracer.dir/src/AppDelegate.m.i
+
+CMakeFiles/RayTracer.dir/src/AppDelegate.m.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling OBJC source to assembly CMakeFiles/RayTracer.dir/src/AppDelegate.m.s"
+	/usr/bin/clang $(OBJC_DEFINES) $(OBJC_INCLUDES) $(OBJC_FLAGS) -S /Users/johnbeatty/Documents/Projects/metal_ray_tracer/src/AppDelegate.m -o CMakeFiles/RayTracer.dir/src/AppDelegate.m.s
+
+CMakeFiles/RayTracer.dir/src/Renderer.m.o: CMakeFiles/RayTracer.dir/flags.make
+CMakeFiles/RayTracer.dir/src/Renderer.m.o: /Users/johnbeatty/Documents/Projects/metal_ray_tracer/src/Renderer.m
+CMakeFiles/RayTracer.dir/src/Renderer.m.o: CMakeFiles/RayTracer.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building OBJC object CMakeFiles/RayTracer.dir/src/Renderer.m.o"
+	/usr/bin/clang $(OBJC_DEFINES) $(OBJC_INCLUDES) -x objective-c $(OBJC_FLAGS) -MD -MT CMakeFiles/RayTracer.dir/src/Renderer.m.o -MF CMakeFiles/RayTracer.dir/src/Renderer.m.o.d -o CMakeFiles/RayTracer.dir/src/Renderer.m.o -c /Users/johnbeatty/Documents/Projects/metal_ray_tracer/src/Renderer.m
+
+CMakeFiles/RayTracer.dir/src/Renderer.m.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing OBJC source to CMakeFiles/RayTracer.dir/src/Renderer.m.i"
+	/usr/bin/clang $(OBJC_DEFINES) $(OBJC_INCLUDES) $(OBJC_FLAGS) -E /Users/johnbeatty/Documents/Projects/metal_ray_tracer/src/Renderer.m > CMakeFiles/RayTracer.dir/src/Renderer.m.i
+
+CMakeFiles/RayTracer.dir/src/Renderer.m.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling OBJC source to assembly CMakeFiles/RayTracer.dir/src/Renderer.m.s"
+	/usr/bin/clang $(OBJC_DEFINES) $(OBJC_INCLUDES) $(OBJC_FLAGS) -S /Users/johnbeatty/Documents/Projects/metal_ray_tracer/src/Renderer.m -o CMakeFiles/RayTracer.dir/src/Renderer.m.s
+
 # Object files for target RayTracer
 RayTracer_OBJECTS = \
-"CMakeFiles/RayTracer.dir/src/main.m.o"
+"CMakeFiles/RayTracer.dir/src/main.m.o" \
+"CMakeFiles/RayTracer.dir/src/AppDelegate.m.o" \
+"CMakeFiles/RayTracer.dir/src/Renderer.m.o"
 
 # External object files for target RayTracer
 RayTracer_EXTERNAL_OBJECTS =
 
-RayTracer: CMakeFiles/RayTracer.dir/src/main.m.o
-RayTracer: CMakeFiles/RayTracer.dir/build.make
-RayTracer: CMakeFiles/RayTracer.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking OBJC executable RayTracer"
+RayTracer.app/Contents/MacOS/RayTracer: CMakeFiles/RayTracer.dir/src/main.m.o
+RayTracer.app/Contents/MacOS/RayTracer: CMakeFiles/RayTracer.dir/src/AppDelegate.m.o
+RayTracer.app/Contents/MacOS/RayTracer: CMakeFiles/RayTracer.dir/src/Renderer.m.o
+RayTracer.app/Contents/MacOS/RayTracer: CMakeFiles/RayTracer.dir/build.make
+RayTracer.app/Contents/MacOS/RayTracer: CMakeFiles/RayTracer.dir/link.txt
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Linking OBJC executable RayTracer.app/Contents/MacOS/RayTracer"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/RayTracer.dir/link.txt --verbose=$(VERBOSE)
-	/opt/homebrew/bin/cmake -E copy /Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/default.metallib /Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/default.metallib
+	/opt/homebrew/bin/cmake -E make_directory /Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/RayTracer.app/Contents/MacOS/../Resources
+	/opt/homebrew/bin/cmake -E copy /Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/default.metallib /Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/RayTracer.app/Contents/MacOS/../Resources/default.metallib
 
 # Rule to build all files generated by this target.
-CMakeFiles/RayTracer.dir/build: RayTracer
+CMakeFiles/RayTracer.dir/build: RayTracer.app/Contents/MacOS/RayTracer
 .PHONY : CMakeFiles/RayTracer.dir/build
 
 CMakeFiles/RayTracer.dir/clean:

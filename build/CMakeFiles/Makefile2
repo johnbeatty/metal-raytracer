@@ -118,12 +118,12 @@ CMakeFiles/MetalShaders.dir/clean:
 CMakeFiles/RayTracer.dir/all: CMakeFiles/MetalShaders.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/RayTracer.dir/build.make CMakeFiles/RayTracer.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/RayTracer.dir/build.make CMakeFiles/RayTracer.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles --progress-num=2,3 "Built target RayTracer"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles --progress-num=2,3,4,5 "Built target RayTracer"
 .PHONY : CMakeFiles/RayTracer.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/RayTracer.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles 3
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles 5
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/RayTracer.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles 0
 .PHONY : CMakeFiles/RayTracer.dir/rule
@@ -135,7 +135,7 @@ RayTracer: CMakeFiles/RayTracer.dir/rule
 # codegen rule for target.
 CMakeFiles/RayTracer.dir/codegen: CMakeFiles/MetalShaders.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/RayTracer.dir/build.make CMakeFiles/RayTracer.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles --progress-num=2,3 "Finished codegen for target RayTracer"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/johnbeatty/Documents/Projects/metal_ray_tracer/build/CMakeFiles --progress-num=2,3,4,5 "Finished codegen for target RayTracer"
 .PHONY : CMakeFiles/RayTracer.dir/codegen
 
 # clean rule for target.
