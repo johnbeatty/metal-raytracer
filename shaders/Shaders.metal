@@ -346,8 +346,98 @@ kernel void ray_sphere_intersect(device const Ray* rays [[ buffer(0) ]],
 // Chapter 5: Render sphere silhouette to texture
 // ---------------------------
 
-// Helper: Check if ray hits sphere (simplified for rendering)
-bool ray_hits_sphere(Ray ray, Sphere sphere)
+// ---------------------------
+// Chapter 6: Helper functions for 3D rendering with lighting
+// ---------------------------
+
+// Helper: Compute sphere normal at a point (Metal version)
+float4 sphere_normal_at_metal(Sphere sphere, float4 point)
+{
+    // Transform point to object space
+    float4x4 inv = float4x4(sphere.inverseTransform.columns[0],
+                           sphere.inverseTransform.columns[1],
+                           sphere.inverseTransform.columns[2],
+                           sphere.inverseTransform.columns[3]);
+    float4 object_point = inv * point;
+    
+    // Compute normal in object space
+    float4 object_normal = object_point;
+    object_normal.w = 0.0;
+    
+    // Transform normal back to world space using inverse transpose
+    float4x4 inv_transpose = transpose(inv);
+    float4 world_normal = inv_transpose * object_normal;
+    world_normal.w = 0.0;
+    
+    return normalize(world_normal);
+}
+
+// Helper: Compute lighting at a point using Phong reflection model (Metal version)
+float4 lighting_metal(Material material, PointLight light, float4 point, float4 eye_vector, float4 normal)
+{
+    // Combine material color with light intensity
+    float4 effective_color = material.color * light.intensity;
+    effective_color.w = 1.0;
+    
+    // Find direction to light
+    float4 light_vector = normalize(light.position - point);
+    
+    // Compute ambient contribution
+    float4 ambient = effective_color * material.ambient;
+    ambient.w = 1.0;
+    
+    // light_dot_normal represents cosine of angle between light vector and normal
+    float light_dot_normal = dot(light_vector, normal);
+    
+    float4 diffuse = float4(0, 0, 0, 0);
+    float4 specular = float4(0, 0, 0, 0);
+    
+    if (light_dot_normal >= 0.0) {
+        // Compute diffuse contribution
+        diffuse = effective_color * material.diffuse * light_dot_normal;
+        diffuse.w = 1.0;
+        
+        // Compute reflection vector
+        float4 reflect_vector = -light_vector + normal * 2.0 * light_dot_normal;
+        reflect_vector.w = 0.0;
+        reflect_vector = normalize(reflect_vector);
+        
+        // reflect_dot_eye represents cosine of angle between reflection vector and eye
+        float reflect_dot_eye = dot(reflect_vector, eye_vector);
+        
+        if (reflect_dot_eye > 0.0) {
+            // Compute specular contribution
+            float factor = pow(reflect_dot_eye, material.shininess);
+            specular = light.intensity * material.specular * factor;
+            specular.w = 1.0;
+        }
+    }
+    
+    // Add all three contributions
+    float4 result = ambient + diffuse + specular;
+    result.w = 1.0;
+    return result;
+}
+
+// Helper: Find closest intersection t value
+bool find_hit_t(float t0, float t1, thread float* hit_t)
+{
+    // Find the smallest positive t
+    if (t0 > 0.0 && t1 > 0.0) {
+        *hit_t = min(t0, t1);
+        return true;
+    } else if (t0 > 0.0) {
+        *hit_t = t0;
+        return true;
+    } else if (t1 > 0.0) {
+        *hit_t = t1;
+        return true;
+    }
+    return false;
+}
+
+// Helper: Check if ray hits sphere and return hit distance
+bool ray_sphere_intersect_detailed(Ray ray, Sphere sphere, thread float* hit_t)
 {
     // Transform ray to object space
     float4x4 inverse_transform = float4x4(sphere.inverseTransform.columns[0],
@@ -356,7 +446,7 @@ bool ray_hits_sphere(Ray ray, Sphere sphere)
                                           sphere.inverseTransform.columns[3]);
     Ray object_ray = transform_ray(ray, inverse_transform);
     
-    // Quick intersection test
+    // Intersection test
     float3 ray_origin = object_ray.origin.xyz;
     float3 ray_direction = object_ray.direction.xyz;
     
@@ -370,21 +460,20 @@ bool ray_hits_sphere(Ray ray, Sphere sphere)
         return false;
     }
     
-    // Check if any intersection is in front of the ray (t > 0)
     float sqrt_disc = sqrt(discriminant);
     float t0 = (-b - sqrt_disc) / (2.0 * a);
     float t1 = (-b + sqrt_disc) / (2.0 * a);
     
-    return (t0 > 0.0) || (t1 > 0.0);
+    return find_hit_t(t0, t1, hit_t);
 }
 
-// Kernel: Render sphere silhouette
-// Based on Chapter 5 exercise from "The Ray Tracer Challenge"
-kernel void render_sphere_silhouette(texture2d<float, access::write> output [[ texture(0) ]],
-                                     uint2 gid [[ thread_position_in_grid ]])
+// Kernel: Render shaded sphere (Chapter 6)
+// Full 3D rendering with Phong lighting model
+kernel void render_sphere_shaded(texture2d<float, access::write> output [[ texture(0) ]],
+                                 uint2 gid [[ thread_position_in_grid ]])
 {
-    // Canvas dimensions
-    const int canvas_pixels = 100;
+    // Canvas dimensions - increased for better quality (400x400 for sharper image)
+    const int canvas_pixels = 400;
     
     // Check bounds
     if (gid.x >= canvas_pixels || gid.y >= canvas_pixels) {
@@ -397,7 +486,7 @@ kernel void render_sphere_silhouette(texture2d<float, access::write> output [[ t
     // Wall position and size
     float wall_z = 10.0;
     float wall_size = 7.0;
-    float half_size = wall_size / 2.0;  // Renamed from 'half' (reserved keyword)
+    float half_size = wall_size / 2.0;
     float pixel_size = wall_size / canvas_pixels;
     
     // Compute world coordinates for this pixel
@@ -408,28 +497,56 @@ kernel void render_sphere_silhouette(texture2d<float, access::write> output [[ t
     // Compute the point on the wall that the ray will target
     float4 wall_position = float4(world_x, world_y, wall_z, 1.0);
     
-    // Create ray from origin toward wall
+    // Create ray from origin toward wall - NORMALIZED DIRECTION
     float4 direction = normalize(wall_position - ray_origin);
     Ray ray;
     ray.origin = ray_origin;
     ray.direction = direction;
     
-    // Create unit sphere at origin
+    // Create sphere with material
     Sphere sphere;
     sphere.id = 1;
-    // Initialize transform as identity matrix using proper Metal syntax
+    // Identity transform
     sphere.transform.columns[0] = float4(1.0, 0.0, 0.0, 0.0);
     sphere.transform.columns[1] = float4(0.0, 1.0, 0.0, 0.0);
     sphere.transform.columns[2] = float4(0.0, 0.0, 1.0, 0.0);
     sphere.transform.columns[3] = float4(0.0, 0.0, 0.0, 1.0);
     sphere.inverseTransform = sphere.transform;
     
+    // Create light source
+    PointLight light;
+    light.position = float4(-10.0, 10.0, -10.0, 1.0);
+    light.intensity = float4(1.0, 1.0, 1.0, 1.0);
+    
+    // Create material for sphere (magenta)
+    Material material;
+    material.color = float4(1.0, 0.2, 1.0, 1.0);
+    material.ambient = 0.1;
+    material.diffuse = 0.9;
+    material.specular = 0.9;
+    material.shininess = 200.0;
+    
     // Check for intersection
+    float hit_t;
     float4 color;
-    if (ray_hits_sphere(ray, sphere)) {
-        color = float4(1.0, 0.0, 0.0, 1.0);  // Red hit
+    
+    if (ray_sphere_intersect_detailed(ray, sphere, &hit_t)) {
+        // Hit! Compute lighting at intersection point
+        
+        // Compute hit point
+        float4 point = ray.origin + ray.direction * hit_t;
+        
+        // Compute normal at hit point
+        float4 normal = sphere_normal_at_metal(sphere, point);
+        
+        // Eye vector is the negative of ray direction
+        float4 eye = -ray.direction;
+        
+        // Compute color with lighting
+        color = lighting_metal(material, light, point, eye, normal);
     } else {
-        color = float4(0.0, 0.0, 0.0, 1.0);  // Black miss
+        // Miss - black background
+        color = float4(0.0, 0.0, 0.0, 1.0);
     }
     
     // Write to output texture

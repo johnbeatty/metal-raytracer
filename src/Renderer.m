@@ -69,21 +69,21 @@
     }
     
     // Chapter 5: Create compute pipeline for sphere silhouette
-    id<MTLFunction> computeFunction = [defaultLibrary newFunctionWithName:@"render_sphere_silhouette"];
+    id<MTLFunction> computeFunction = [defaultLibrary newFunctionWithName:@"render_sphere_shaded"];
     if (computeFunction) {
         _computePipelineState = [_device newComputePipelineStateWithFunction:computeFunction error:&error];
         if (!_computePipelineState) {
             NSLog(@"Failed to create compute pipeline state: %@", error);
         }
     } else {
-        NSLog(@"Failed to find compute function 'render_sphere_silhouette'");
+        NSLog(@"Failed to find compute function 'render_sphere_shaded'");
     }
     
     // Chapter 5: Create texture for sphere rendering
     MTLTextureDescriptor *textureDescriptor = [[MTLTextureDescriptor alloc] init];
     textureDescriptor.pixelFormat = MTLPixelFormatRGBA8Unorm;
-    textureDescriptor.width = 100;  // Canvas size from Chapter 5
-    textureDescriptor.height = 100;
+    textureDescriptor.width = 400;  // Increased for sharper image (was 100)
+    textureDescriptor.height = 400;
     textureDescriptor.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
     _sphereTexture = [_device newTextureWithDescriptor:textureDescriptor];
 }
@@ -131,9 +131,9 @@
     [computeEncoder setComputePipelineState:_computePipelineState];
     [computeEncoder setTexture:_sphereTexture atIndex:0];
     
-    // Dispatch 100x100 threads (one per pixel)
+    // Dispatch 400x400 threads (one per pixel) - updated for higher resolution
     MTLSize threadsPerThreadgroup = MTLSizeMake(16, 16, 1);
-    MTLSize threadgroups = MTLSizeMake((100 + 15) / 16, (100 + 15) / 16, 1);
+    MTLSize threadgroups = MTLSizeMake((400 + 15) / 16, (400 + 15) / 16, 1);
     
     [computeEncoder dispatchThreadgroups:threadgroups threadsPerThreadgroup:threadsPerThreadgroup];
     [computeEncoder endEncoding];
