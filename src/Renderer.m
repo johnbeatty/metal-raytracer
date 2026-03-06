@@ -39,7 +39,8 @@
         defaultLibrary = [_device newLibraryWithURL:libraryURL error:&error];
     } else {
         // Fallback for CLI/local testing if not correctly bundled
-        defaultLibrary = [_device newLibraryWithFile:@"default.metallib" error:&error];
+        NSURL *fallbackURL = [NSURL fileURLWithPath:@"default.metallib"];
+        defaultLibrary = [_device newLibraryWithURL:fallbackURL error:&error];
     }
     
     if (!defaultLibrary) {

@@ -58,6 +58,7 @@ set(TEST_SOURCES
     tests/TupleTests.m
     tests/VectorTests.m
     tests/MatrixTests.m
+    tests/TransformationTests.m
     tests/main.m
 )
 
