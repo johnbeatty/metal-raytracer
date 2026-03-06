@@ -46,3 +46,35 @@ add_custom_command(TARGET RayTracer POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
     ${METALLIB}
     $<TARGET_FILE_DIR:RayTracer>/../Resources/default.metallib)
+
+# Enable testing
+enable_testing()
+
+# XCTest Framework
+find_library(XCTEST_LIB XCTest)
+
+# Test Bundle
+set(TEST_SOURCES
+    tests/TupleTests.m
+    tests/VectorTests.m
+    tests/main.m
+)
+
+add_executable(RayTracerTests MACOSX_BUNDLE ${TEST_SOURCES})
+target_link_libraries(RayTracerTests
+    ${XCTEST_LIB}
+    ${METAL_LIB}
+    ${METALKIT_LIB}
+    ${COCOA_LIB}
+    ${QUARTZ_LIB}
+)
+
+# Copy metal library to test bundle
+add_custom_command(TARGET RayTracerTests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:RayTracerTests>/../Resources
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${METALLIB}
+    $<TARGET_FILE_DIR:RayTracerTests>/../Resources/default.metallib)
+
+# Add to CTest
+add_test(NAME XCTest COMMAND RayTracerTests)
