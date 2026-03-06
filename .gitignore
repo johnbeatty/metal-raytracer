@@ -1,0 +1,45 @@
+# Build directory
+build/
+cmake-build-*/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+CMakeLists.txt.user
+compile_commands.json
+CTestTestfile.cmake
+_deps
+*.cmake
+
+# Xcode
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+
+# macOS
+.DS_Store
+*.app.dSYM
+*.dSYM
+*.dSYM.zip
+
+# Metal intermediates
+*.air
+*.metallib
+
+# Compiled binaries
+*.o
+*.obj
+*.exe
+*.out
+*.app
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

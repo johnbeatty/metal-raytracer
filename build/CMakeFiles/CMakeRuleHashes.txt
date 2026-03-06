@@ -1,3 +1,0 @@
-# Hashes of file build rules.
-59cff0932ae54b80433da5e85ae5ea00 CMakeFiles/MetalShaders
-71a4e8289fa2a2c6917359f7d4dd4758 default.metallib
