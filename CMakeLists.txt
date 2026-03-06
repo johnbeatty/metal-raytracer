@@ -57,6 +57,7 @@ find_library(XCTEST_LIB XCTest)
 set(TEST_SOURCES
     tests/TupleTests.m
     tests/VectorTests.m
+    tests/MatrixTests.m
     tests/main.m
 )
 
