@@ -59,6 +59,7 @@ set(TEST_SOURCES
     tests/VectorTests.m
     tests/MatrixTests.m
     tests/TransformationTests.m
+    tests/IntersectionTests.m
     tests/main.m
 )
 

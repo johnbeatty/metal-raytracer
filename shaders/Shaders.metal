@@ -251,3 +251,89 @@ kernel void matrix_inverse(device const Matrix4x4* m [[ buffer(0) ]],
                   length(product[2] - identity_col2) + length(product[3] - identity_col3);
     success[index] = (error < 0.01);
 }
+
+
+// ---------------------------
+// Chapter 5: Ray-Sphere Intersections (Compute)
+// ---------------------------
+
+// Helper: Transform a ray by a matrix
+Ray transform_ray(Ray ray, float4x4 matrix)
+{
+    Ray result;
+    result.origin = matrix * ray.origin;
+    result.direction = matrix * ray.direction;
+    return result;
+}
+
+// Helper: Intersect a ray with a unit sphere at origin
+// Returns number of intersections (0, 1, or 2) and writes t values to out_t0 and out_t1
+int intersect_unit_sphere(Ray ray, thread float* out_t0, thread float* out_t1)
+{
+    // Sphere equation: x^2 + y^2 + z^2 = 1
+    // Ray: origin + direction * t
+    // Substituting: (origin + direction*t)^2 = 1
+    // Expanding: direction^2 * t^2 + 2*origin*direction*t + origin^2 - 1 = 0
+    // This is a quadratic: a*t^2 + b*t + c = 0
+    
+    float3 ray_origin = ray.origin.xyz;
+    float3 ray_direction = ray.direction.xyz;
+    
+    float a = dot(ray_direction, ray_direction);
+    float b = 2.0 * dot(ray_origin, ray_direction);
+    float c = dot(ray_origin, ray_origin) - 1.0;
+    
+    float discriminant = b*b - 4.0*a*c;
+    
+    if (discriminant < 0.0) {
+        return 0;  // No intersection
+    }
+    
+    float sqrt_disc = sqrt(discriminant);
+    *out_t0 = (-b - sqrt_disc) / (2.0 * a);
+    *out_t1 = (-b + sqrt_disc) / (2.0 * a);
+    
+    if (discriminant == 0.0) {
+        return 1;  // Tangent (one intersection)
+    }
+    
+    return 2;  // Two intersections
+}
+
+// Kernel: Intersect rays with spheres
+// Each thread processes one ray-sphere pair
+// Output: up to 2 intersections per ray written to intersection buffer
+kernel void ray_sphere_intersect(device const Ray* rays [[ buffer(0) ]],
+                                 device const Sphere* spheres [[ buffer(1) ]],
+                                 device Intersection* intersections [[ buffer(2) ]],
+                                 device int* intersection_counts [[ buffer(3) ]],
+                                 uint ray_index [[ thread_position_in_grid ]])
+{
+    Ray ray = rays[ray_index];
+    Sphere sphere = spheres[0];  // For now, assume one sphere
+    
+    // Transform ray to object space using sphere's inverse transform
+    float4x4 inverse_transform = float4x4(sphere.inverseTransform.columns[0],
+                                          sphere.inverseTransform.columns[1],
+                                          sphere.inverseTransform.columns[2],
+                                          sphere.inverseTransform.columns[3]);
+    Ray object_ray = transform_ray(ray, inverse_transform);
+    
+    // Intersect with unit sphere
+    float t0, t1;
+    int count = intersect_unit_sphere(object_ray, &t0, &t1);
+    
+    // Write intersection count
+    intersection_counts[ray_index] = count;
+    
+    // Write intersections (base index for this ray is ray_index * 2)
+    int base_index = ray_index * 2;
+    if (count >= 1) {
+        intersections[base_index].t = t0;
+        intersections[base_index].objectId = sphere.id;
+    }
+    if (count >= 2) {
+        intersections[base_index + 1].t = t1;
+        intersections[base_index + 1].objectId = sphere.id;
+    }
+}
