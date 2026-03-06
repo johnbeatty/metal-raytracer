@@ -38,11 +38,15 @@ vertexShader(uint vertexID [[vertex_id]],
 // ---------------------------
 // Fragment Shader
 // ---------------------------
-fragment float4 fragmentShader(RasterizerData in [[stage_in]])
+fragment float4 fragmentShader(RasterizerData in [[stage_in]],
+                               texture2d<float> sphereTexture [[ texture(0) ]])
 {
-    // Just return a static color for now to verify the pipeline works
-    // We'll hook up a texture later
-    return float4(in.textureCoordinate.x, in.textureCoordinate.y, 0.0, 1.0);
+    constexpr sampler textureSampler (mag_filter::linear, min_filter::linear);
+    
+    // Sample from the sphere texture using texture coordinates
+    float4 color = sphereTexture.sample(textureSampler, in.textureCoordinate);
+    
+    return color;
 }
 
 
@@ -336,4 +340,98 @@ kernel void ray_sphere_intersect(device const Ray* rays [[ buffer(0) ]],
         intersections[base_index + 1].t = t1;
         intersections[base_index + 1].objectId = sphere.id;
     }
+}
+
+// ---------------------------
+// Chapter 5: Render sphere silhouette to texture
+// ---------------------------
+
+// Helper: Check if ray hits sphere (simplified for rendering)
+bool ray_hits_sphere(Ray ray, Sphere sphere)
+{
+    // Transform ray to object space
+    float4x4 inverse_transform = float4x4(sphere.inverseTransform.columns[0],
+                                          sphere.inverseTransform.columns[1],
+                                          sphere.inverseTransform.columns[2],
+                                          sphere.inverseTransform.columns[3]);
+    Ray object_ray = transform_ray(ray, inverse_transform);
+    
+    // Quick intersection test
+    float3 ray_origin = object_ray.origin.xyz;
+    float3 ray_direction = object_ray.direction.xyz;
+    
+    float a = dot(ray_direction, ray_direction);
+    float b = 2.0 * dot(ray_origin, ray_direction);
+    float c = dot(ray_origin, ray_origin) - 1.0;
+    
+    float discriminant = b*b - 4.0*a*c;
+    
+    if (discriminant < 0.0) {
+        return false;
+    }
+    
+    // Check if any intersection is in front of the ray (t > 0)
+    float sqrt_disc = sqrt(discriminant);
+    float t0 = (-b - sqrt_disc) / (2.0 * a);
+    float t1 = (-b + sqrt_disc) / (2.0 * a);
+    
+    return (t0 > 0.0) || (t1 > 0.0);
+}
+
+// Kernel: Render sphere silhouette
+// Based on Chapter 5 exercise from "The Ray Tracer Challenge"
+kernel void render_sphere_silhouette(texture2d<float, access::write> output [[ texture(0) ]],
+                                     uint2 gid [[ thread_position_in_grid ]])
+{
+    // Canvas dimensions
+    const int canvas_pixels = 100;
+    
+    // Check bounds
+    if (gid.x >= canvas_pixels || gid.y >= canvas_pixels) {
+        return;
+    }
+    
+    // Ray origin (eye position)
+    float4 ray_origin = float4(0.0, 0.0, -5.0, 1.0);
+    
+    // Wall position and size
+    float wall_z = 10.0;
+    float wall_size = 7.0;
+    float half_size = wall_size / 2.0;  // Renamed from 'half' (reserved keyword)
+    float pixel_size = wall_size / canvas_pixels;
+    
+    // Compute world coordinates for this pixel
+    // y increases downward in screen space, so we flip it
+    float world_x = -half_size + pixel_size * gid.x;
+    float world_y = half_size - pixel_size * gid.y;
+    
+    // Compute the point on the wall that the ray will target
+    float4 wall_position = float4(world_x, world_y, wall_z, 1.0);
+    
+    // Create ray from origin toward wall
+    float4 direction = normalize(wall_position - ray_origin);
+    Ray ray;
+    ray.origin = ray_origin;
+    ray.direction = direction;
+    
+    // Create unit sphere at origin
+    Sphere sphere;
+    sphere.id = 1;
+    // Initialize transform as identity matrix using proper Metal syntax
+    sphere.transform.columns[0] = float4(1.0, 0.0, 0.0, 0.0);
+    sphere.transform.columns[1] = float4(0.0, 1.0, 0.0, 0.0);
+    sphere.transform.columns[2] = float4(0.0, 0.0, 1.0, 0.0);
+    sphere.transform.columns[3] = float4(0.0, 0.0, 0.0, 1.0);
+    sphere.inverseTransform = sphere.transform;
+    
+    // Check for intersection
+    float4 color;
+    if (ray_hits_sphere(ray, sphere)) {
+        color = float4(1.0, 0.0, 0.0, 1.0);  // Red hit
+    } else {
+        color = float4(0.0, 0.0, 0.0, 1.0);  // Black miss
+    }
+    
+    // Write to output texture
+    output.write(color, gid);
 }

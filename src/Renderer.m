@@ -9,6 +9,10 @@
     id<MTLBuffer> _vertexBuffer;
     NSUInteger _numVertices;
     vector_uint2 _viewportSize;
+    
+    // Chapter 5: Sphere silhouette rendering
+    id<MTLComputePipelineState> _computePipelineState;
+    id<MTLTexture> _sphereTexture;
 }
 
 - (nonnull instancetype)initWithMetalKitView:(nonnull MTKView *)mtkView
@@ -21,6 +25,7 @@
         
         [self loadMetal:mtkView];
         [self buildMesh];
+        [self renderSphereSilhouette];
     }
     return self;
 }
@@ -58,10 +63,29 @@
     pipelineStateDescriptor.colorAttachments[0].pixelFormat = mtkView.colorPixelFormat;
     
     _pipelineState = [_device newRenderPipelineStateWithDescriptor:pipelineStateDescriptor
-                                                           error:&error];
+                                                            error:&error];
     if (!_pipelineState) {
         NSLog(@"Failed to created pipeline state, error %@", error);
     }
+    
+    // Chapter 5: Create compute pipeline for sphere silhouette
+    id<MTLFunction> computeFunction = [defaultLibrary newFunctionWithName:@"render_sphere_silhouette"];
+    if (computeFunction) {
+        _computePipelineState = [_device newComputePipelineStateWithFunction:computeFunction error:&error];
+        if (!_computePipelineState) {
+            NSLog(@"Failed to create compute pipeline state: %@", error);
+        }
+    } else {
+        NSLog(@"Failed to find compute function 'render_sphere_silhouette'");
+    }
+    
+    // Chapter 5: Create texture for sphere rendering
+    MTLTextureDescriptor *textureDescriptor = [[MTLTextureDescriptor alloc] init];
+    textureDescriptor.pixelFormat = MTLPixelFormatRGBA8Unorm;
+    textureDescriptor.width = 100;  // Canvas size from Chapter 5
+    textureDescriptor.height = 100;
+    textureDescriptor.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
+    _sphereTexture = [_device newTextureWithDescriptor:textureDescriptor];
 }
 
 - (void)buildMesh
@@ -81,8 +105,8 @@
     };
     
     _vertexBuffer = [_device newBufferWithBytes:quadVertices
-                                         length:sizeof(quadVertices)
-                                        options:MTLResourceStorageModeShared];
+                                          length:sizeof(quadVertices)
+                                         options:MTLResourceStorageModeShared];
     _numVertices = sizeof(quadVertices) / sizeof(Vertex);
 }
 
@@ -90,6 +114,34 @@
 {
     _viewportSize.x = size.width;
     _viewportSize.y = size.height;
+}
+
+// Chapter 5: Render sphere silhouette using compute shader
+- (void)renderSphereSilhouette
+{
+    if (!_computePipelineState || !_sphereTexture) {
+        NSLog(@"Cannot render sphere: compute pipeline or texture not ready");
+        return;
+    }
+    
+    id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
+    commandBuffer.label = @"SphereSilhouetteCommand";
+    
+    id<MTLComputeCommandEncoder> computeEncoder = [commandBuffer computeCommandEncoder];
+    [computeEncoder setComputePipelineState:_computePipelineState];
+    [computeEncoder setTexture:_sphereTexture atIndex:0];
+    
+    // Dispatch 100x100 threads (one per pixel)
+    MTLSize threadsPerThreadgroup = MTLSizeMake(16, 16, 1);
+    MTLSize threadgroups = MTLSizeMake((100 + 15) / 16, (100 + 15) / 16, 1);
+    
+    [computeEncoder dispatchThreadgroups:threadgroups threadsPerThreadgroup:threadsPerThreadgroup];
+    [computeEncoder endEncoding];
+    
+    [commandBuffer commit];
+    [commandBuffer waitUntilCompleted];
+    
+    NSLog(@"Sphere silhouette rendered to texture");
 }
 
 - (void)drawInMTKView:(nonnull MTKView *)view
@@ -101,7 +153,7 @@
     
     if(renderPassDescriptor != nil)
     {
-        // Simple clear color for now
+        // Clear to black
         renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 1.0);
         
         id<MTLRenderCommandEncoder> renderEncoder =
@@ -109,6 +161,7 @@
         
         [renderEncoder setRenderPipelineState:_pipelineState];
         [renderEncoder setVertexBuffer:_vertexBuffer offset:0 atIndex:0];
+        [renderEncoder setFragmentTexture:_sphereTexture atIndex:0];
         
         // Draw the quad
         [renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle
