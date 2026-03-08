@@ -29,6 +29,7 @@ macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses 
 8. **Chapter 9**: Planes, hexagonal room demo - 8 tests (PlaneTests.m)
 9. **Chapter 10**: Patterns (stripes, gradient, ring, checker) - 19 tests (PatternTests.m)
 10. **Chapter 11**: Reflection & Refraction foundation - 15 tests (ReflectionRefractionTests.m)
+11. **Chapter 12**: Cubes - 24 tests (CubeTests.m)
 
 **Visual Progress:**
 - Started with simple red/green gradient (Chapter 5-6)
@@ -38,7 +39,7 @@ macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses 
 - Four spheres with different patterns: stripes, gradient, rings, checkers (Chapter 10)
 - **Animated reflection/refraction demo**: Mirror sphere, glass sphere, 4 colored spheres with smooth camera panning (Chapter 11)
 
-**Total: 149 tests passing** ✓
+**Total: 173 tests passing** ✓
 
 ## Build Commands
 
@@ -214,20 +215,15 @@ kernel void tuple_add(device const Tuple* a [[buffer(0)]],
 
 ## Next Chapters Available
 
-- Chapter 12: Cubes
 - Chapter 13: Cylinders
 - Chapter 14: Groups (object hierarchies)
 
 ## Current Working State
 
-- All 149 tests passing
-- Reflection & refraction fully implemented with recursive shading
-- **Animated demo complete**: Mirror sphere, glass sphere, 4 colored spheres, smooth camera panning
-- Real-time 60fps rendering at 1920x1080 full HD
-- Material struct extended with reflective, transparency, refractive_index fields
-- Sphere struct now has per-object material support
-- Recursive shading functions: color_at_recursive(), reflected_color(), refracted_color(), shade_hit_recursive()
-- Ready for Chapter 12: Cubes
+- All 173 tests passing
+- Cube geometry fully implemented (intersection, normals, transformations)
+- Ready for demo scene with cubes
+- Ready for Chapter 13: Cylinders or user-directed improvements
 
 ## Dependencies
 
