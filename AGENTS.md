@@ -6,6 +6,34 @@ Guidelines for agentic coding agents working in this Metal Ray Tracer repository
 
 macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses Objective-C for app logic and Metal Shading Language for GPU compute kernels and rendering.
 
+## Discoveries
+
+- Metal doesn't have built-in `inverse()` or `determinant()` for 4x4 matrices - we implemented manual `matrix_inverse_4x4()` using cofactor expansion
+- Texture caching issues: The metallib file must be explicitly copied to the app bundle's Resources directory after each build
+- Compute shaders need forward declarations when functions call each other
+- `half` is a reserved keyword in Metal - use `half_size` instead
+- For top-down camera views, simple projection math is more reliable than full view transforms
+
+## Accomplished
+
+**Completed Chapters:**
+1. **Chapter 1-2**: Tuples, vectors, points - 24 tests (TupleTests.m, VectorTests.m)
+2. **Chapter 3**: Matrix operations (multiply, transpose, inverse) - 10 tests (MatrixTests.m)
+3. **Chapter 4**: Transformations (translation, scaling, rotation X/Y/Z, shearing) - 19 tests (TransformationTests.m)
+4. **Chapter 5**: Ray-sphere intersections, hit determination - 14 tests (IntersectionTests.m)
+5. **Chapter 6**: Phong lighting (ambient, diffuse, specular) - 15 tests (LightingTests.m)
+6. **Chapter 7**: World system, camera, multiple objects - 12 tests (WorldTests.m)
+7. **Chapter 8**: Shadow detection - 7 tests (ShadowTests.m)
+8. **Chapter 9**: Planes, hexagonal room demo - 8 tests (PlaneTests.m)
+
+**Visual Progress:**
+- Started with simple red/green gradient (Chapter 5-6)
+- Added 3D shaded magenta sphere (Chapter 6)
+- Full 6-sphere scene with shadows (Chapter 7-8)
+- Hexagonal room with wood floor, viewed from above (Chapter 9)
+
+**Total: 109 tests passing** ✓
+
 ## Build Commands
 
 ```bash
@@ -128,35 +156,69 @@ kernel void tuple_add(device const Tuple* a [[buffer(0)]],
 ```
 .
 ├── CMakeLists.txt          # Build configuration
+├── .gitignore              # Excludes build/, generated files
+├── AGENTS.md               # Documentation for agents (build commands, code style)
 ├── src/                    # Objective-C source files
 │   ├── main.m             # Entry point
 │   ├── AppDelegate.{h,m}  # App lifecycle
-│   ├── Renderer.{h,m}     # Metal rendering
+│   ├── Renderer.{h,m}     # Metal rendering: compute pipeline, texture management
 │   └── SharedTypes.h      # Shared CPU/GPU types
 ├── shaders/               # Metal shading language
 │   └── Shaders.metal      # Kernels and shaders
 ├── tests/                 # XCTest unit tests
 │   ├── TupleTests.m       # Chapter 1: Tuples
 │   ├── VectorTests.m      # Chapter 1: Vectors
+│   ├── MatrixTests.m      # Chapter 3: Matrices
+│   ├── TransformationTests.m # Chapter 4: Transformations
+│   ├── IntersectionTests.m # Chapter 5: Ray-sphere intersections
+│   ├── LightingTests.m    # Chapter 6: Phong lighting
+│   ├── WorldTests.m       # Chapter 7: World system
+│   ├── ShadowTests.m      # Chapter 8: Shadows
+│   ├── PlaneTests.m       # Chapter 9: Planes
 │   └── main.m             # Test entry point
 └── build/                 # Build output (generated)
     └── RayTracer.app      # macOS app bundle
 ```
 
+**Key Technical Details:**
+- **Metal Library**: `default.metallib` must be in `RayTracer.app/Contents/Resources/`
+- **Resolution**: 1920x1080 Full HD
+- **Compute Threads**: 16x16 threadgroups, dispatched for full resolution
+- **SharedTypes.h**: Contains both CPU and GPU-compatible types, uses `#ifdef __METAL_VERSION__` for conditional compilation
+- **Tests**: Run with `./build/RayTracerTests.app/Contents/MacOS/RayTracerTests`
+- **App**: Run with `open ./build/RayTracer.app`
+
 ## Architecture Notes
 
 - **AppDelegate**: Sets up NSWindow and MTKView, owns Renderer
-- **Renderer**: Implements MTKViewDelegate, manages Metal pipeline
+- **Renderer**: Implements MTKViewDelegate, manages Metal pipeline, ensures metallib is copied to Resources
 - **Shaders.metal**: Contains vertex/fragment shaders and compute kernels
+- **SharedTypes.h**: Contains all math structures (Tuple, Matrix4x4, Ray, Sphere, Plane, Material, World, Camera) and lighting functions
 - Uses full-screen quad for ray tracing output (vertex shader passes through)
 - Compute kernels operate on Tuple structs for vector math operations
+- Resolution: 1920x1080 Full HD
+- Threadgroups: 16x16 dispatched for full resolution
 
 ## Adding New Features
 
 1. **New compute kernel**: Add to `shaders/Shaders.metal`, follow existing naming
-2. **New UI**: Modify `AppDelegate.m`, maintain 800x600 default window size
+2. **New UI**: Modify `AppDelegate.m`, maintain 1920x1080 Full HD resolution
 3. **Shared types**: Add to `SharedTypes.h` with proper alignment for GPU
 4. **Metal resources**: Ensure proper error checking and nil handling
+
+## Next Chapters Available
+
+- Chapter 10: Patterns (stripes, gradients, rings, checkers)
+- Chapter 11: Reflection & Refraction (mirrors, glass)
+- Chapter 12: Cubes
+- Chapter 13: Cylinders
+- Chapter 14: Groups (object hierarchies)
+
+## Current Working State
+
+- All 109 tests passing
+- Hexagonal room renders correctly (wood floor, 6 walls, viewed from above)
+- Ready to continue with Chapter 10 or user-directed improvements
 
 ## Dependencies
 
