@@ -1538,8 +1538,7 @@ kernel void render_hexagon_demo(texture2d<float, access::write> output [[ textur
         
         // Create edge cylinder
         // The edge connects corner i to corner i+1
-        // The edge midpoint is at radius = cos(30°) = 0.866
-        // The edge is tangent to the circle at that point (perpendicular to radius)
+        // The cylinder needs to extend from -0.5 to +0.5 (centered) so both ends touch the spheres at radius 1
         
         float mid_radius = 0.86602540378;  // cos(30°)
         float edge_angle = side_angle + M_PI_F / 6.0;  // +30 degrees
@@ -1549,6 +1548,12 @@ kernel void render_hexagon_demo(texture2d<float, access::write> output [[ textur
                                         0, 1, 0, 0,
                                         0, 0, 0.25, 0,
                                         0, 0, 0, 1);
+        
+        // Translate -0.5 in y to center the cylinder (from -0.5 to +0.5 instead of 0 to 1)
+        float4x4 edge_center = float4x4(1, 0, 0, 0,
+                                        0, 1, 0, 0,
+                                        0, 0, 1, 0,
+                                        0, -0.5, 0, 1);
         
         // Rotate -90° around z to lay the cylinder flat (y-axis becomes x-axis in xy plane)
         float4x4 edge_rot_z = float4x4(0, 1, 0, 0,
@@ -1570,11 +1575,12 @@ kernel void render_hexagon_demo(texture2d<float, access::write> output [[ textur
                                      se, 0, ce, 0,
                                      0, 0, 0, 1);
         
-        // Combine: rot_y * trans * rot_z * scale
-        // Order: scale first, then rot_z, then trans, then rot_y
-        float4x4 edge_t1 = edge_rot_z * edge_scale;
-        float4x4 edge_t2 = edge_trans * edge_t1;
-        float4x4 edge_transform = edge_rot_y * edge_t2;
+        // Combine: rot_y * trans * rot_z * center * scale
+        // Order: scale first, then center, then rot_z, then trans, then rot_y
+        float4x4 edge_t1 = edge_center * edge_scale;
+        float4x4 edge_t2 = edge_rot_z * edge_t1;
+        float4x4 edge_t3 = edge_trans * edge_t2;
+        float4x4 edge_transform = edge_rot_y * edge_t3;
         
         add_hex_cylinder(silver, edge_transform);
     }
