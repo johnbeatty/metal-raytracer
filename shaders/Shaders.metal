@@ -1430,3 +1430,242 @@ kernel void render_cube_room_demo(texture2d<float, access::write> output [[ text
     
     output.write(color, gid);
 }
+
+// Chapter 14: Hexagon Demo
+// Renders a hexagon model made of 6 sides, each with a corner (sphere) and edge (cylinder)
+kernel void render_hexagon_demo(texture2d<float, access::write> output [[ texture(0) ]],
+                                 constant float &time [[ buffer(1) ]],
+                                 uint2 gid [[ thread_position_in_grid ]])
+{
+    const int hsize = 1920;
+    const int vsize = 1080;
+    
+    if (gid.x >= hsize || gid.y >= vsize) return;
+    
+    // Camera slowly rotating around the hexagon
+    float angle = time * 0.3;
+    float cam_x = sin(angle) * 6.0;
+    float cam_z = -cos(angle) * 6.0;
+    float4 ray_origin = float4(cam_x, 3.0, cam_z, 1);
+    
+    float wall_z = 5.0;
+    float wall_size = 10.0;
+    float pixel_size = wall_size / vsize;
+    
+    float world_x = -wall_size/2.0 + pixel_size * gid.x;
+    float world_y = wall_size/2.0 - pixel_size * gid.y;
+    float4 wall_pos = float4(world_x, world_y, wall_z, 1);
+    
+    float4 ray_direction = normalize(wall_pos - ray_origin);
+    
+    Ray ray;
+    ray.origin = ray_origin;
+    ray.direction = ray_direction;
+    
+    // Light above the hexagon
+    PointLight light;
+    light.position = float4(0, 8, 0, 1);
+    light.intensity = float4(1.2, 1.2, 1.2, 1);
+    
+    // Colors
+    float4 gold = float4(1.0, 0.84, 0.0, 1);      // Hexagon corners
+    float4 silver = float4(0.75, 0.75, 0.75, 1);  // Hexagon edges
+    float4 floor_color = float4(0.2, 0.2, 0.3, 1);
+    
+    // Create 6 sides of the hexagon
+    // Each side has: 1 corner sphere + 1 edge cylinder = 12 objects total
+    #define NUM_HEX_OBJECTS 12
+    
+    int object_types[NUM_HEX_OBJECTS];  // 0 = sphere, 1 = cylinder
+    float4x4 object_transforms[NUM_HEX_OBJECTS];
+    float4x4 object_inv_transforms[NUM_HEX_OBJECTS];
+    Material object_materials[NUM_HEX_OBJECTS];
+    
+    int obj_idx = 0;
+    
+    // Helper to create a sphere
+    auto add_hex_sphere = [&](float4 color, float4x4 transform) {
+        object_types[obj_idx] = 0;  // sphere
+        object_transforms[obj_idx] = transform;
+        object_inv_transforms[obj_idx] = matrix_inverse_4x4(transform);
+        object_materials[obj_idx].color = color;
+        object_materials[obj_idx].ambient = 0.3;
+        object_materials[obj_idx].diffuse = 0.7;
+        object_materials[obj_idx].specular = 0.5;
+        object_materials[obj_idx].shininess = 100.0;
+        obj_idx++;
+    };
+    
+    // Helper to create a cylinder
+    auto add_hex_cylinder = [&](float4 color, float4x4 transform) {
+        object_types[obj_idx] = 1;  // cylinder
+        object_transforms[obj_idx] = transform;
+        object_inv_transforms[obj_idx] = matrix_inverse_4x4(transform);
+        object_materials[obj_idx].color = color;
+        object_materials[obj_idx].ambient = 0.3;
+        object_materials[obj_idx].diffuse = 0.7;
+        object_materials[obj_idx].specular = 0.5;
+        object_materials[obj_idx].shininess = 100.0;
+        obj_idx++;
+    };
+    
+    // Build 6 sides of the hexagon
+    for (int i = 0; i < 6; i++) {
+        float side_angle = i * M_PI_F / 3.0;  // 60 degrees per side
+        
+        // Create corner sphere at radius 1
+        // Local transform: scale 25%, then translate -1 in z
+        float4x4 corner_scale = float4x4(0.25, 0, 0, 0,
+                                         0, 0.25, 0, 0,
+                                         0, 0, 0.25, 0,
+                                         0, 0, 0, 1);
+        float4x4 corner_trans = float4x4(1, 0, 0, 0,
+                                          0, 1, 0, 0,
+                                          0, 0, 1, 0,
+                                          0, 0, -1.0, 1);  // Translate -1 in z
+        
+        // Rotate around y-axis by side_angle
+        float c = cos(side_angle);
+        float s = sin(side_angle);
+        float4x4 corner_rot = float4x4(c, 0, -s, 0,
+                                      0, 1, 0, 0,
+                                      s, 0, c, 0,
+                                      0, 0, 0, 1);
+        
+        // Order: rotation * translation * scale (scale first, then translate, then rotate)
+        float4x4 corner_transform = corner_rot * corner_trans * corner_scale;
+        add_hex_sphere(gold, corner_transform);
+        
+        // Create edge cylinder
+        // The edge connects corner i to corner i+1
+        // The edge midpoint is at radius = cos(30°) = 0.866
+        // The edge is tangent to the circle at that point (perpendicular to radius)
+        
+        float mid_radius = 0.86602540378;  // cos(30°)
+        float edge_angle = side_angle + M_PI_F / 6.0;  // +30 degrees
+        
+        // Scale: thin in x/z (25%), length 1 in y
+        float4x4 edge_scale = float4x4(0.25, 0, 0, 0,
+                                        0, 1, 0, 0,
+                                        0, 0, 0.25, 0,
+                                        0, 0, 0, 1);
+        
+        // Rotate -90° around z to lay the cylinder flat (y-axis becomes x-axis in xy plane)
+        float4x4 edge_rot_z = float4x4(0, 1, 0, 0,
+                                       -1, 0, 0, 0,
+                                       0, 0, 1, 0,
+                                       0, 0, 0, 1);
+        
+        // Translate to midpoint radius (in z, which becomes radial after rotation)
+        float4x4 edge_trans = float4x4(1, 0, 0, 0,
+                                       0, 1, 0, 0,
+                                       0, 0, 1, 0,
+                                       0, 0, -mid_radius, 1);
+        
+        // Rotate around y by edge_angle
+        float ce = cos(edge_angle);
+        float se = sin(edge_angle);
+        float4x4 edge_rot_y = float4x4(ce, 0, -se, 0,
+                                     0, 1, 0, 0,
+                                     se, 0, ce, 0,
+                                     0, 0, 0, 1);
+        
+        // Combine: rot_y * trans * rot_z * scale
+        // Order: scale first, then rot_z, then trans, then rot_y
+        float4x4 edge_t1 = edge_rot_z * edge_scale;
+        float4x4 edge_t2 = edge_trans * edge_t1;
+        float4x4 edge_transform = edge_rot_y * edge_t2;
+        
+        add_hex_cylinder(silver, edge_transform);
+    }
+    
+    // Find closest intersection with hexagon objects
+    float closest_t = 999999.0;
+    int hit_idx = -1;
+    float4 hit_point, hit_normal;
+    
+    for (int i = 0; i < NUM_HEX_OBJECTS; i++) {
+        float t0, t1;
+        int count = 0;
+        
+        // Create temporary objects for intersection
+        if (object_types[i] == 0) {
+            // Sphere
+            Sphere s;
+            s.transform.columns[0] = object_transforms[i][0];
+            s.transform.columns[1] = object_transforms[i][1];
+            s.transform.columns[2] = object_transforms[i][2];
+            s.transform.columns[3] = object_transforms[i][3];
+            s.inverseTransform.columns[0] = object_inv_transforms[i][0];
+            s.inverseTransform.columns[1] = object_inv_transforms[i][1];
+            s.inverseTransform.columns[2] = object_inv_transforms[i][2];
+            s.inverseTransform.columns[3] = object_inv_transforms[i][3];
+            
+            count = ray_sphere_intersect_detailed(ray, s, &t0) ? 1 : 0;
+            if (count > 0 && t0 > 0.001 && t0 < closest_t) {
+                closest_t = t0;
+                hit_idx = i;
+                hit_point = ray.origin + ray.direction * t0;
+                hit_normal = sphere_normal_at_metal(s, hit_point);
+            }
+        } else {
+            // Cylinder (simplified - check if within y bounds 0-1)
+            Ray obj_ray;
+            obj_ray.origin = object_inv_transforms[i] * ray.origin;
+            obj_ray.direction = object_inv_transforms[i] * ray.direction;
+            
+            float a = obj_ray.direction.x * obj_ray.direction.x + obj_ray.direction.z * obj_ray.direction.z;
+            
+            if (fabs(a) > 0.0001) {
+                float b = 2.0 * (obj_ray.origin.x * obj_ray.direction.x + obj_ray.origin.z * obj_ray.direction.z);
+                float c_val = obj_ray.origin.x * obj_ray.origin.x + obj_ray.origin.z * obj_ray.origin.z - 1.0;
+                float disc = b * b - 4.0 * a * c_val;
+                
+                if (disc >= 0) {
+                    float sqrt_disc = sqrt(disc);
+                    float t_candidate[2] = {(-b - sqrt_disc) / (2.0 * a), 
+                                            (-b + sqrt_disc) / (2.0 * a)};
+                    
+                    for (int ti = 0; ti < 2; ti++) {
+                        float t_val = t_candidate[ti];
+                        if (t_val > 0.001) {
+                            float4 obj_pt = obj_ray.origin + obj_ray.direction * t_val;
+                            // Check y bounds (0 to 1)
+                            if (obj_pt.y >= 0.0 && obj_pt.y <= 1.0) {
+                                float world_t = t_val;  // Approximation
+                                if (world_t < closest_t) {
+                                    closest_t = world_t;
+                                    hit_idx = i;
+                                    hit_point = ray.origin + ray.direction * t_val;
+                                    // Normal calculation
+                                    float4 obj_normal = float4(obj_pt.x, 0, obj_pt.z, 0);
+                                    float4x4 inv_t = transpose(object_inv_transforms[i]);
+                                    hit_normal = normalize(inv_t * obj_normal);
+                                }
+                                break;  // Take first valid hit
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    float4 color;
+    
+    if (hit_idx != -1) {
+        Material hit_mat = object_materials[hit_idx];
+        float4 eye = -ray.direction;
+        
+        // Simple shadow check
+        bool shadow = false;
+        
+        color = lighting_metal_shadow(hit_mat, light, hit_point, eye, hit_normal, shadow);
+    } else {
+        // Sky/floor
+        float t = float(gid.y) / float(vsize);
+        color = float4(0.1, 0.1, 0.2 + 0.1 * t, 1.0);
+    }
+    
+    output.write(color, gid);
+}
