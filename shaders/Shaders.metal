@@ -605,6 +605,133 @@ float4 plane_normal_at_metal(Plane plane, float4 point)
     return normalize(world_normal);
 }
 
+// Chapter 12: Cube functions for Metal
+
+// Ray-cube intersection using slab method
+// A cube is bounded by 6 planes: x=±1, y=±1, z=±1
+bool intersect_cube_metal(Cube cube, Ray ray, thread float* t0_out, thread float* t1_out)
+{
+    // Transform ray to cube's object space
+    float4x4 inv = float4x4(cube.inverseTransform.columns[0],
+                            cube.inverseTransform.columns[1],
+                            cube.inverseTransform.columns[2],
+                            cube.inverseTransform.columns[3]);
+    
+    float4 origin = inv * ray.origin;
+    float4 direction = inv * ray.direction;
+    
+    float min_t = -1000000.0;
+    float max_t = 1000000.0;
+    
+    // Check each pair of parallel planes
+    // X planes: x = -1 and x = 1
+    if (abs(direction.x) < 0.0001) {
+        if (origin.x < -1.0 || origin.x > 1.0) {
+            return false;
+        }
+    } else {
+        float tx0 = (-1.0 - origin.x) / direction.x;
+        float tx1 = (1.0 - origin.x) / direction.x;
+        if (tx0 > tx1) {
+            float temp = tx0;
+            tx0 = tx1;
+            tx1 = temp;
+        }
+        if (tx0 > min_t) min_t = tx0;
+        if (tx1 < max_t) max_t = tx1;
+        if (min_t > max_t) return false;
+    }
+    
+    // Y planes: y = -1 and y = 1
+    if (abs(direction.y) < 0.0001) {
+        if (origin.y < -1.0 || origin.y > 1.0) {
+            return false;
+        }
+    } else {
+        float ty0 = (-1.0 - origin.y) / direction.y;
+        float ty1 = (1.0 - origin.y) / direction.y;
+        if (ty0 > ty1) {
+            float temp = ty0;
+            ty0 = ty1;
+            ty1 = temp;
+        }
+        if (ty0 > min_t) min_t = ty0;
+        if (ty1 < max_t) max_t = ty1;
+        if (min_t > max_t) return false;
+    }
+    
+    // Z planes: z = -1 and z = 1
+    if (abs(direction.z) < 0.0001) {
+        if (origin.z < -1.0 || origin.z > 1.0) {
+            return false;
+        }
+    } else {
+        float tz0 = (-1.0 - origin.z) / direction.z;
+        float tz1 = (1.0 - origin.z) / direction.z;
+        if (tz0 > tz1) {
+            float temp = tz0;
+            tz0 = tz1;
+            tz1 = temp;
+        }
+        if (tz0 > min_t) min_t = tz0;
+        if (tz1 < max_t) max_t = tz1;
+        if (min_t > max_t) return false;
+    }
+    
+    // We have valid intersection(s)
+    int count = 0;
+    
+    if (min_t > 0.001) {
+        *t0_out = min_t;
+        count = 1;
+    }
+    
+    if (max_t > 0.001 && max_t != min_t) {
+        if (count == 0) {
+            *t0_out = max_t;
+            count = 1;
+        } else {
+            *t1_out = max_t;
+            count = 2;
+        }
+    }
+    
+    return count > 0;
+}
+
+// Compute normal at a point on a cube
+float4 cube_normal_at_metal(Cube cube, float4 point)
+{
+    // Transform point to cube's object space
+    float4x4 inv = float4x4(cube.inverseTransform.columns[0],
+                            cube.inverseTransform.columns[1],
+                            cube.inverseTransform.columns[2],
+                            cube.inverseTransform.columns[3]);
+    float4 object_point = inv * point;
+    
+    // Find the largest component to determine which face we're on
+    float abs_x = abs(object_point.x);
+    float abs_y = abs(object_point.y);
+    float abs_z = abs(object_point.z);
+    
+    float4 object_normal;
+    
+    if (abs_x >= abs_y && abs_x >= abs_z) {
+        object_normal = float4(object_point.x > 0 ? 1.0 : -1.0, 0, 0, 0);
+    } else if (abs_y >= abs_x && abs_y >= abs_z) {
+        object_normal = float4(0, object_point.y > 0 ? 1.0 : -1.0, 0, 0);
+    } else {
+        object_normal = float4(0, 0, object_point.z > 0 ? 1.0 : -1.0, 0);
+    }
+    
+    // Transform normal back to world space
+    float4x4 inv_transpose = transpose(inv);
+    float4 world_normal = inv_transpose * object_normal;
+    world_normal.w = 0.0;
+    
+    return normalize(world_normal);
+}
+
 // Kernel: Render shaded sphere (Chapter 6)
 // Full 3D rendering with Phong lighting model
 kernel void render_sphere_shaded(texture2d<float, access::write> output [[ texture(0) ]],
@@ -1100,6 +1227,201 @@ kernel void render_reflection_refraction_demo(texture2d<float, access::write> ou
         float refl = hit_material.reflective;
         color = base_color * (1.0 - refl) + reflected * refl;
         color.w = 1.0;
+    } else {
+        // Sky gradient
+        float t = float(gid.y) / float(vsize);
+        color = float4(0.05, 0.05, 0.15 + 0.1 * t, 1.0);
+    }
+    
+    output.write(color, gid);
+}
+
+// Chapter 12: Cube Room Demo
+// A room made of cubes with a table, box on table, and scattered boxes
+kernel void render_cube_room_demo(texture2d<float, access::write> output [[ texture(0) ]],
+                                   uint2 gid [[ thread_position_in_grid ]])
+{
+    const int hsize = 1920;
+    const int vsize = 1080;
+    
+    if (gid.x >= hsize || gid.y >= vsize) return;
+    
+    // Camera inside the room, slightly elevated
+    float4 ray_origin = float4(0, 2.5, -8, 1);
+    float wall_z = 5.0;
+    float wall_size = 14.0;
+    float pixel_size = wall_size / vsize;
+    
+    float world_x = -wall_size/2.0 + pixel_size * gid.x;
+    float world_y = wall_size/2.0 - pixel_size * gid.y;
+    float4 wall_pos = float4(world_x, world_y, wall_z, 1);
+    
+    float4 ray_direction = normalize(wall_pos - ray_origin);
+    
+    Ray ray;
+    ray.origin = ray_origin;
+    ray.direction = ray_direction;
+    
+    // Light - moved to be more in front and above the scene
+    PointLight light;
+    light.position = float4(0, 7, 0, 1);  // Centered above the room
+    light.intensity = float4(1.5, 1.5, 1.5, 1);  // Brighter light
+    
+    // Colors
+    float4 white = float4(0.9, 0.9, 0.9, 1);
+    float4 wood_dark = float4(0.4, 0.3, 0.2, 1);
+    float4 wood_light = float4(0.6, 0.5, 0.4, 1);
+    float4 red = float4(0.8, 0.2, 0.2, 1);
+    float4 blue = float4(0.2, 0.2, 0.8, 1);
+    float4 green = float4(0.2, 0.7, 0.2, 1);
+    float4 yellow = float4(0.9, 0.8, 0.2, 1);
+    float4 purple = float4(0.6, 0.2, 0.8, 1);
+    
+    // Create cubes: 1 room + 5 table + 1 box on table + 4 floor boxes = 11 cubes
+    // We'll use a simple array approach
+    #define NUM_CUBES 11
+    
+    float4 cube_colors[NUM_CUBES];
+    float4x4 cube_transforms[NUM_CUBES];
+    float4x4 cube_inv_transforms[NUM_CUBES];
+    Material cube_materials[NUM_CUBES];
+    
+    int cube_idx = 0;
+    
+    // Helper to add a cube
+    auto add_cube = [&](float4 color, float tx, float ty, float tz, 
+                        float sx, float sy, float sz,
+                        float ambient, float diffuse, float specular) {
+        cube_colors[cube_idx] = color;
+        
+        // Create transform matrix (scale then translate)
+        float4x4 mat = float4x4(sx, 0, 0, 0,
+                                0, sy, 0, 0,
+                                0, 0, sz, 0,
+                                tx, ty, tz, 1);
+        cube_transforms[cube_idx] = mat;
+        cube_inv_transforms[cube_idx] = matrix_inverse_4x4(mat);
+        
+        cube_materials[cube_idx].color = color;
+        cube_materials[cube_idx].ambient = ambient;
+        cube_materials[cube_idx].diffuse = diffuse;
+        cube_materials[cube_idx].specular = specular;
+        cube_materials[cube_idx].shininess = 100.0;
+        cube_materials[cube_idx].reflective = 0.0;
+        cube_materials[cube_idx].transparency = 0.0;
+        cube_materials[cube_idx].refractive_index = 1.0;
+        
+        cube_idx++;
+    };
+    
+    // 0. The Room - large hollow cube (we'll make it inside-out conceptually)
+    // Actually, let's make 5 walls: floor, ceiling, left, right, back
+    // Increased ambient for better visibility
+    // Floor
+    add_cube(wood_dark, 0, -2, 0, 12, 0.5, 12, 0.4, 0.8, 0.1);
+    // Ceiling
+    add_cube(wood_light, 0, 8, 0, 12, 0.5, 12, 0.4, 0.8, 0.1);
+    // Back wall
+    add_cube(wood_dark, 0, 3, 6, 12, 6, 0.5, 0.4, 0.8, 0.1);
+    // Left wall
+    add_cube(wood_light, -6, 3, 0, 0.5, 6, 12, 0.4, 0.8, 0.1);
+    // Right wall
+    add_cube(wood_light, 6, 3, 0, 0.5, 6, 12, 0.4, 0.8, 0.1);
+    
+    // Table legs (4 cubes) - increased ambient
+    float table_height = 2.0;
+    float table_leg_size = 0.3;
+    float leg_y = table_height / 2.0;
+    add_cube(wood_dark, -1.5, leg_y, 0, table_leg_size, table_height, table_leg_size, 0.3, 0.9, 0.2);
+    add_cube(wood_dark, 1.5, leg_y, 0, table_leg_size, table_height, table_leg_size, 0.3, 0.9, 0.2);
+    add_cube(wood_dark, -1.5, leg_y, 2, table_leg_size, table_height, table_leg_size, 0.3, 0.9, 0.2);
+    add_cube(wood_dark, 1.5, leg_y, 2, table_leg_size, table_height, table_leg_size, 0.3, 0.9, 0.2);
+    
+    // Table surface - increased ambient
+    add_cube(wood_light, 0, table_height + 0.1, 1, 4, 0.2, 3, 0.3, 0.9, 0.3);
+    
+    // Box on table - higher ambient to make it visible
+    add_cube(red, 0.5, table_height + 0.6, 1, 0.8, 0.8, 0.8, 0.4, 0.9, 0.3);
+    
+    // Scattered boxes on floor - increased ambient
+    add_cube(blue, -4, 0.5, 3, 1, 1, 1, 0.3, 0.9, 0.2);
+    add_cube(green, 3, 0.5, 4, 0.8, 0.8, 0.8, 0.3, 0.9, 0.2);
+    add_cube(yellow, -3, 0.4, -2, 0.6, 0.6, 0.6, 0.3, 0.9, 0.2);
+    add_cube(purple, 4, 0.7, 0, 1.2, 1.2, 1.2, 0.3, 0.9, 0.2);
+    
+    // Find closest cube hit
+    float closest_t = 999999.0;
+    int hit_idx = -1;
+    float4 hit_point, hit_normal;
+    
+    for (int i = 0; i < NUM_CUBES; i++) {
+        // Create temporary cube struct for intersection
+        Cube c;
+        c.id = i + 1;
+        c.transform.columns[0] = cube_transforms[i][0];
+        c.transform.columns[1] = cube_transforms[i][1];
+        c.transform.columns[2] = cube_transforms[i][2];
+        c.transform.columns[3] = cube_transforms[i][3];
+        c.inverseTransform.columns[0] = cube_inv_transforms[i][0];
+        c.inverseTransform.columns[1] = cube_inv_transforms[i][1];
+        c.inverseTransform.columns[2] = cube_inv_transforms[i][2];
+        c.inverseTransform.columns[3] = cube_inv_transforms[i][3];
+        
+        float t0, t1;
+        int count = intersect_cube_metal(c, ray, &t0, &t1);
+        
+        if (count > 0) {
+            float t = t0;
+            if (t > 0.001 && t < closest_t) {
+                closest_t = t;
+                hit_idx = i;
+                hit_point = ray.origin + ray.direction * t;
+                hit_normal = cube_normal_at_metal(c, hit_point);
+            }
+        }
+    }
+    
+    float4 color;
+    
+    if (hit_idx != -1) {
+        Material hit_mat = cube_materials[hit_idx];
+        float4 eye = -ray.direction;
+        
+        // Simple lighting
+        bool shadow = false;
+        
+        // Check shadow by casting ray to light
+        float4 light_dir = normalize(light.position - hit_point);
+        Ray shadow_ray;
+        shadow_ray.origin = hit_point + hit_normal * 0.001;
+        shadow_ray.direction = light_dir;
+        
+        float light_dist = length(light.position - hit_point);
+        
+        for (int i = 0; i < NUM_CUBES; i++) {
+            if (i == hit_idx) continue;  // Skip self
+            
+            Cube c;
+            c.id = i + 1;
+            c.transform.columns[0] = cube_transforms[i][0];
+            c.transform.columns[1] = cube_transforms[i][1];
+            c.transform.columns[2] = cube_transforms[i][2];
+            c.transform.columns[3] = cube_transforms[i][3];
+            c.inverseTransform.columns[0] = cube_inv_transforms[i][0];
+            c.inverseTransform.columns[1] = cube_inv_transforms[i][1];
+            c.inverseTransform.columns[2] = cube_inv_transforms[i][2];
+            c.inverseTransform.columns[3] = cube_inv_transforms[i][3];
+            
+            float t0, t1;
+            int count = intersect_cube_metal(c, shadow_ray, &t0, &t1);
+            
+            if (count > 0 && t0 > 0.001 && t0 < light_dist) {
+                shadow = true;
+                break;
+            }
+        }
+        
+        color = lighting_metal_shadow(hit_mat, light, hit_point, eye, hit_normal, shadow);
     } else {
         // Sky gradient
         float t = float(gid.y) / float(vsize);

@@ -76,10 +76,10 @@
         NSLog(@"Failed to created pipeline state, error %@", error);
     }
     
-    // Chapter 11: Create compute pipeline for reflection/refraction demo
-    id<MTLFunction> computeFunction = [defaultLibrary newFunctionWithName:@"render_reflection_refraction_demo"];
+    // Chapter 12: Create compute pipeline for cube room demo
+    id<MTLFunction> computeFunction = [defaultLibrary newFunctionWithName:@"render_cube_room_demo"];
     if (computeFunction) {
-        NSLog(@"Found compute function 'render_reflection_refraction_demo'");
+        NSLog(@"Found compute function 'render_cube_room_demo'");
         _computePipelineState = [_device newComputePipelineStateWithFunction:computeFunction error:&error];
         if (_computePipelineState) {
             NSLog(@"Successfully created compute pipeline");
@@ -87,7 +87,7 @@
             NSLog(@"Failed to create compute pipeline state: %@", error);
         }
     } else {
-        NSLog(@"Failed to find compute function 'render_reflection_refraction_demo'");
+        NSLog(@"Failed to find compute function 'render_cube_room_demo'");
     }
     
     // Chapter 5: Create texture for sphere rendering
