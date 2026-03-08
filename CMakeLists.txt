@@ -62,6 +62,7 @@ set(TEST_SOURCES
     tests/IntersectionTests.m
     tests/LightingTests.m
     tests/WorldTests.m
+    tests/ShadowTests.m
     tests/main.m
 )
 

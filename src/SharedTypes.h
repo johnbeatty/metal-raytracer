@@ -463,6 +463,12 @@ static inline int intersect_world(World world, Ray ray, Intersection* intersecti
     return count;
 }
 
+// Chapter 8: Shadows - Forward declarations
+static inline int is_shadowed(World world, vector_float4 point);
+static inline vector_float4 lighting_with_shadow(Material material, PointLight light, 
+                                                vector_float4 point, vector_float4 eye_vector, 
+                                                vector_float4 normal, int in_shadow);
+
 // Helper: Shade a hit point
 // This combines lighting with the material of the hit object
 static inline vector_float4 shade_hit(World world, Intersection hit, Ray ray) {
@@ -490,11 +496,14 @@ static inline vector_float4 shade_hit(World world, Intersection hit, Ray ray) {
     // Eye vector is negative of ray direction
     vector_float4 eye = -ray.direction;
     
+    // Check if point is in shadow
+    int in_shadow = is_shadowed(world, point);
+    
     // Default material (white)
     Material material = DEFAULT_MATERIAL;
     
-    // Compute lighting
-    return lighting(material, world.light, point, eye, normal);
+    // Compute lighting with shadow
+    return lighting_with_shadow(material, world.light, point, eye, normal, in_shadow);
 }
 
 // Helper: Compute color at a point in the world (main rendering function)
@@ -513,6 +522,90 @@ static inline vector_float4 color_at(World world, Ray ray) {
     }
     
     return shade_hit(world, hit, ray);
+}
+
+// Chapter 8: Shadows
+
+// Helper: Check if a point is in shadow
+// Casts a ray from point toward light, returns true if anything blocks it
+static inline int is_shadowed(World world, vector_float4 point) {
+    // Vector from point to light
+    vector_float4 light_dir = world.light.position - point;
+    float distance = simd_length(light_dir.xyz);
+    light_dir = simd_normalize(light_dir);
+    
+    // Create shadow ray starting slightly offset from point to avoid self-intersection
+    Ray shadow_ray;
+    shadow_ray.origin = point + light_dir * 0.001f;  // Small offset
+    shadow_ray.direction = light_dir;
+    
+    // Check for intersections
+    Intersection intersections[MAX_INTERSECTIONS_TOTAL];
+    int count = intersect_world(world, shadow_ray, intersections);
+    
+    // Check if any intersection is between point and light
+    for (int i = 0; i < count; i++) {
+        if (intersections[i].t > 0 && intersections[i].t < distance) {
+            return 1;  // In shadow
+        }
+    }
+    
+    return 0;  // Not in shadow
+}
+
+// Helper: Compute lighting with shadow support
+static inline vector_float4 lighting_with_shadow(Material material, PointLight light, 
+                                                vector_float4 point, vector_float4 eye_vector, 
+                                                vector_float4 normal, int in_shadow) {
+    // Combine material color with light intensity
+    vector_float4 effective_color = material.color * light.intensity;
+    effective_color.w = 1.0;
+    
+    // Find direction to light
+    vector_float4 light_vector = simd_normalize(light.position - point);
+    
+    // Compute ambient contribution (always present, even in shadow)
+    vector_float4 ambient = effective_color * material.ambient;
+    ambient.w = 1.0;
+    
+    // If in shadow, only return ambient light
+    if (in_shadow) {
+        vector_float4 result = ambient;
+        result.w = 1.0;
+        return result;
+    }
+    
+    // light_dot_normal represents cosine of angle between light vector and normal
+    float light_dot_normal = simd_dot(light_vector, normal);
+    
+    vector_float4 diffuse = {0, 0, 0, 0};
+    vector_float4 specular = {0, 0, 0, 0};
+    
+    if (light_dot_normal >= 0) {
+        // Compute diffuse contribution
+        diffuse = effective_color * material.diffuse * light_dot_normal;
+        diffuse.w = 1.0;
+        
+        // Compute reflection vector
+        vector_float4 reflect_vector = -light_vector + normal * 2.0f * light_dot_normal;
+        reflect_vector.w = 0.0;
+        reflect_vector = simd_normalize(reflect_vector);
+        
+        // reflect_dot_eye represents cosine of angle between reflection vector and eye
+        float reflect_dot_eye = simd_dot(reflect_vector, eye_vector);
+        
+        if (reflect_dot_eye > 0) {
+            // Compute specular contribution
+            float factor = powf(reflect_dot_eye, material.shininess);
+            specular = light.intensity * material.specular * factor;
+            specular.w = 1.0;
+        }
+    }
+    
+    // Add all three contributions
+    vector_float4 result = ambient + diffuse + specular;
+    result.w = 1.0;
+    return result;
 }
 
 // Chapter 7: Camera and View Transform

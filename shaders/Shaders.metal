@@ -419,6 +419,93 @@ float4 lighting_metal(Material material, PointLight light, float4 point, float4 
     return result;
 }
 
+// Chapter 8: Shadows
+
+// Forward declaration
+bool ray_sphere_intersect_detailed(Ray ray, Sphere sphere, thread float* hit_t);
+
+// Helper: Check if a point is in shadow (Metal version)
+// Casts a ray from point toward light, returns true if anything blocks it
+bool is_shadowed_metal(Sphere spheres[6], int sphere_count, PointLight light, float4 point)
+{
+    // Vector from point to light
+    float4 light_dir = light.position - point;
+    float distance = length(light_dir.xyz);
+    light_dir = normalize(light_dir);
+    
+    // Create shadow ray starting slightly offset from point
+    Ray shadow_ray;
+    shadow_ray.origin = point + light_dir * 0.001;  // Small offset to avoid self-intersection
+    shadow_ray.direction = light_dir;
+    
+    // Check for intersections with all spheres
+    for (int i = 0; i < sphere_count; i++) {
+        float t0, t1;
+        if (ray_sphere_intersect_detailed(shadow_ray, spheres[i], &t0)) {
+            // Check if intersection is between point and light
+            if (t0 > 0.0 && t0 < distance) {
+                return true;  // In shadow
+            }
+        }
+    }
+    
+    return false;  // Not in shadow
+}
+
+// Helper: Compute lighting with shadow support (Metal version)
+float4 lighting_metal_shadow(Material material, PointLight light, float4 point, float4 eye_vector, float4 normal, bool in_shadow)
+{
+    // Combine material color with light intensity
+    float4 effective_color = material.color * light.intensity;
+    effective_color.w = 1.0;
+    
+    // Find direction to light
+    float4 light_vector = normalize(light.position - point);
+    
+    // Compute ambient contribution (always present, even in shadow)
+    float4 ambient = effective_color * material.ambient;
+    ambient.w = 1.0;
+    
+    // If in shadow, only return ambient light
+    if (in_shadow) {
+        float4 result = ambient;
+        result.w = 1.0;
+        return result;
+    }
+    
+    // light_dot_normal represents cosine of angle between light vector and normal
+    float light_dot_normal = dot(light_vector, normal);
+    
+    float4 diffuse = float4(0, 0, 0, 0);
+    float4 specular = float4(0, 0, 0, 0);
+    
+    if (light_dot_normal >= 0.0) {
+        // Compute diffuse contribution
+        diffuse = effective_color * material.diffuse * light_dot_normal;
+        diffuse.w = 1.0;
+        
+        // Compute reflection vector
+        float4 reflect_vector = -light_vector + normal * 2.0 * light_dot_normal;
+        reflect_vector.w = 0.0;
+        reflect_vector = normalize(reflect_vector);
+        
+        // reflect_dot_eye represents cosine of angle between reflection vector and eye
+        float reflect_dot_eye = dot(reflect_vector, eye_vector);
+        
+        if (reflect_dot_eye > 0.0) {
+            // Compute specular contribution
+            float factor = pow(reflect_dot_eye, material.shininess);
+            specular = light.intensity * material.specular * factor;
+            specular.w = 1.0;
+        }
+    }
+    
+    // Add all three contributions
+    float4 result = ambient + diffuse + specular;
+    result.w = 1.0;
+    return result;
+}
+
 // Helper: Find closest intersection t value
 bool find_hit_t(float t0, float t1, thread float* hit_t)
 {
@@ -828,7 +915,11 @@ kernel void render_world_scene(texture2d<float, access::write> output [[ texture
             mat = left_mat;
         }
         
-        color = lighting_metal(mat, light, point, eye, normal);
+        // Check if point is in shadow
+        bool in_shadow = is_shadowed_metal(spheres, 6, light, point);
+        
+        // Compute color with lighting and shadow
+        color = lighting_metal_shadow(mat, light, point, eye, normal, in_shadow);
     } else {
         // Miss - black background
         color = float4(0.0, 0.0, 0.0, 1.0);
