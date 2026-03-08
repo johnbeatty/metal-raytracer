@@ -28,6 +28,7 @@ macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses 
 7. **Chapter 8**: Shadow detection - 7 tests (ShadowTests.m)
 8. **Chapter 9**: Planes, hexagonal room demo - 8 tests (PlaneTests.m)
 9. **Chapter 10**: Patterns (stripes, gradient, ring, checker) - 19 tests (PatternTests.m)
+10. **Chapter 11**: Reflection & Refraction foundation - 15 tests (ReflectionRefractionTests.m)
 
 **Visual Progress:**
 - Started with simple red/green gradient (Chapter 5-6)
@@ -35,8 +36,9 @@ macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses 
 - Full 6-sphere scene with shadows (Chapter 7-8)
 - Hexagonal room with wood floor, viewed from above (Chapter 9)
 - Four spheres with different patterns: stripes, gradient, rings, checkers (Chapter 10)
+- Reflection & refraction helpers implemented (Chapter 11)
 
-**Total: 128 tests passing** ✓
+**Total: 143 tests passing** ✓
 
 ## Build Commands
 
@@ -212,16 +214,17 @@ kernel void tuple_add(device const Tuple* a [[buffer(0)]],
 
 ## Next Chapters Available
 
-- Chapter 11: Reflection & Refraction (mirrors, glass)
 - Chapter 12: Cubes
 - Chapter 13: Cylinders
 - Chapter 14: Groups (object hierarchies)
 
 ## Current Working State
 
-- All 128 tests passing
-- Four spheres with different patterns render correctly (stripes, gradient, rings, checkers)
-- Ready to continue with Chapter 11 or user-directed improvements
+- All 143 tests passing
+- Reflection & refraction helpers implemented (reflect, refract, schlick)
+- Material properties extended for reflective and transparent materials
+- Ready to implement recursive reflection/refraction shading (Part 2)
+- Ready for Chapter 12 or user-directed improvements
 
 ## Dependencies
 
