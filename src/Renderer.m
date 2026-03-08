@@ -68,15 +68,15 @@
         NSLog(@"Failed to created pipeline state, error %@", error);
     }
     
-    // Chapter 5: Create compute pipeline for sphere silhouette
-    id<MTLFunction> computeFunction = [defaultLibrary newFunctionWithName:@"render_sphere_shaded"];
+    // Chapter 7: Create compute pipeline for world scene
+    id<MTLFunction> computeFunction = [defaultLibrary newFunctionWithName:@"render_world_scene"];
     if (computeFunction) {
         _computePipelineState = [_device newComputePipelineStateWithFunction:computeFunction error:&error];
         if (!_computePipelineState) {
             NSLog(@"Failed to create compute pipeline state: %@", error);
         }
     } else {
-        NSLog(@"Failed to find compute function 'render_sphere_shaded'");
+        NSLog(@"Failed to find compute function 'render_world_scene'");
     }
     
     // Chapter 5: Create texture for sphere rendering
