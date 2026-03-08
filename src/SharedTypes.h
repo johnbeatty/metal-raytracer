@@ -205,6 +205,31 @@ typedef struct {
     bool closed;                 // If true, caps are added at minimum and maximum
 } Cylinder;
 
+// Chapter 14: Groups
+
+// Shape type enumeration for group children
+typedef enum {
+    SHAPE_SPHERE = 0,
+    SHAPE_PLANE = 1,
+    SHAPE_CUBE = 2,
+    SHAPE_CYLINDER = 3,
+    SHAPE_GROUP = 4  // Groups can contain other groups
+} ShapeType;
+
+// Maximum children per group
+#define MAX_GROUP_CHILDREN 20
+
+// Group type: a container for multiple shapes with a shared transform
+typedef struct {
+    int id;                      // Unique identifier
+    Matrix4x4 transform;         // Transform applied to all children
+    Matrix4x4 inverseTransform;  // Cached inverse for ray transformation
+    int child_ids[MAX_GROUP_CHILDREN];      // IDs of child shapes
+    ShapeType child_types[MAX_GROUP_CHILDREN]; // Types of child shapes
+    int child_count;             // Number of children
+    Material material;           // Default material (children can override)
+} Group;
+
 // Pattern type enumeration
 typedef enum {
     PATTERN_STRIPE = 0,
@@ -488,6 +513,42 @@ static inline void cylinder_set_transform(Cylinder* cylinder, Matrix4x4 transfor
     cylinder->inverseTransform.columns[1] = inv.columns[1];
     cylinder->inverseTransform.columns[2] = inv.columns[2];
     cylinder->inverseTransform.columns[3] = inv.columns[3];
+}
+
+// Chapter 14: Group helper functions
+
+// Helper: Create a group with identity transform
+static inline Group group_create(int id) {
+    Group g;
+    g.id = id;
+    g.transform = MATRIX4X4_IDENTITY;
+    g.inverseTransform = MATRIX4X4_IDENTITY;
+    g.child_count = 0;
+    g.material = DEFAULT_MATERIAL;
+    return g;
+}
+
+// Helper: Set group transform and compute inverse
+static inline void group_set_transform(Group* group, Matrix4x4 transform) {
+    group->transform = transform;
+    matrix_float4x4 mat = matrix_from_columns(transform.columns[0], transform.columns[1], 
+                                               transform.columns[2], transform.columns[3]);
+    matrix_float4x4 inv = matrix_invert(mat);
+    group->inverseTransform.columns[0] = inv.columns[0];
+    group->inverseTransform.columns[1] = inv.columns[1];
+    group->inverseTransform.columns[2] = inv.columns[2];
+    group->inverseTransform.columns[3] = inv.columns[3];
+}
+
+// Helper: Add a child to a group
+static inline int group_add_child(Group* group, int child_id, ShapeType child_type) {
+    if (group->child_count >= MAX_GROUP_CHILDREN) {
+        return 0;  // Failed - group is full
+    }
+    group->child_ids[group->child_count] = child_id;
+    group->child_types[group->child_count] = child_type;
+    group->child_count++;
+    return 1;  // Success
 }
 
 // Chapter 6: Surface normals and lighting
@@ -1083,6 +1144,10 @@ static inline vector_float4 cylinder_normal_at(Cylinder cylinder, vector_float4 
     
     return simd_normalize(world_normal);
 }
+
+// Chapter 14: Ray-group intersection
+// Note: Full implementation would require passing World to look up child shapes
+// For now, we provide a simplified interface
 
 // Helper: Intersect ray with world, return all intersections
 // intersections array must be large enough (MAX_INTERSECTIONS_TOTAL)
