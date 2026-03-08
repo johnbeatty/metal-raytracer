@@ -144,6 +144,15 @@ typedef struct {
     Matrix4x4 inverseTransform;  // Cached inverse for ray transformation
 } Sphere;
 
+// Chapter 9: Planes
+
+// Plane type: infinite plane at y=0 (can be transformed)
+typedef struct {
+    int id;                      // Unique identifier
+    Matrix4x4 transform;         // Transform from object space to world space
+    Matrix4x4 inverseTransform;  // Cached inverse for ray transformation
+} Plane;
+
 // Chapter 6: Light and Shading
 
 // Material type: describes how a surface reflects light
@@ -425,6 +434,78 @@ static inline int intersect_sphere_simple(Sphere sphere, Ray ray, float* t0, flo
     *t1 = (-b + sqrt_disc) / (2.0f * a);
     
     return (discriminant == 0) ? 1 : 2;
+}
+
+// Chapter 9: Plane intersection
+// A plane is a flat surface extending infinitely in the x and z directions
+// By default, it's at y=0 in object space
+
+// Helper: Create a plane with identity transform
+static inline Plane plane_create(int id) {
+    Plane p;
+    p.id = id;
+    p.transform = MATRIX4X4_IDENTITY;
+    p.inverseTransform = MATRIX4X4_IDENTITY;
+    return p;
+}
+
+// Helper: Set plane transform
+static inline void plane_set_transform(Plane* plane, Matrix4x4 transform) {
+    plane->transform = transform;
+    matrix_float4x4 mat = matrix_from_columns(transform.columns[0], transform.columns[1], 
+                                              transform.columns[2], transform.columns[3]);
+    matrix_float4x4 inv = matrix_invert(mat);
+    plane->inverseTransform.columns[0] = inv.columns[0];
+    plane->inverseTransform.columns[1] = inv.columns[1];
+    plane->inverseTransform.columns[2] = inv.columns[2];
+    plane->inverseTransform.columns[3] = inv.columns[3];
+}
+
+// Helper: Compute normal at a point on a plane
+static inline vector_float4 plane_normal_at(Plane plane, vector_float4 point) {
+    // Transform point to object space
+    matrix_float4x4 inv = matrix_from_columns(plane.inverseTransform.columns[0],
+                                               plane.inverseTransform.columns[1],
+                                               plane.inverseTransform.columns[2],
+                                               plane.inverseTransform.columns[3]);
+    vector_float4 object_point = matrix_multiply(inv, point);
+    
+    // Normal in object space is (0, 1, 0, 0) - pointing up
+    vector_float4 object_normal = {0.0f, 1.0f, 0.0f, 0.0f};
+    
+    // Transform normal back to world space
+    matrix_float4x4 inv_transpose = matrix_transpose(inv);
+    vector_float4 world_normal = matrix_multiply(inv_transpose, object_normal);
+    world_normal.w = 0.0f;
+    
+    return simd_normalize(world_normal);
+}
+
+// Helper: Ray-plane intersection
+// Returns 1 if hit, 0 if miss. Writes t value if hit.
+// A plane at y=0 in object space: any point on plane has y=0
+// Ray: origin + direction * t
+// At intersection: origin.y + direction.y * t = 0
+// Therefore: t = -origin.y / direction.y
+static inline int intersect_plane(Plane plane, Ray ray, float* t) {
+    // Transform ray to object space
+    Ray object_ray = ray_transform(ray, plane.inverseTransform);
+    
+    // Check if ray is parallel to plane (direction.y is nearly 0)
+    if (fabs(object_ray.direction.y) < 0.0001f) {
+        return 0;  // Ray is parallel to plane, no intersection
+    }
+    
+    // Compute intersection t
+    float t_val = -object_ray.origin.y / object_ray.direction.y;
+    
+    // Only count intersections in front of the ray (t > 0)
+    if (t_val > 0) {
+        *t = t_val;
+        return 1;  // Hit
+    }
+    
+    return 0;  // Intersection is behind the ray
 }
 
 // Helper: Intersect ray with world, return all intersections

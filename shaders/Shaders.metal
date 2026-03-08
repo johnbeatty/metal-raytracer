@@ -46,6 +46,12 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
     // Sample from the sphere texture using texture coordinates
     float4 color = sphereTexture.sample(textureSampler, in.textureCoordinate);
     
+    // DEBUG: If texture is dark/transparent, show a test pattern
+    if (color.r < 0.1 && color.g < 0.1 && color.b < 0.1) {
+        // Texture wasn't written to - show UV coordinates as colors
+        return float4(in.textureCoordinate.x, in.textureCoordinate.y, 0.5, 1.0);
+    }
+    
     return color;
 }
 
@@ -554,6 +560,57 @@ bool ray_sphere_intersect_detailed(Ray ray, Sphere sphere, thread float* hit_t)
     return find_hit_t(t0, t1, hit_t);
 }
 
+// Chapter 9: Plane intersection functions for Metal
+
+// Helper: Ray-plane intersection
+// Returns true if hit, false if miss. Writes t value if hit.
+bool intersect_plane_metal(Ray ray, Plane plane, thread float* hit_t)
+{
+    // Transform ray to plane's object space
+    float4x4 inv = float4x4(plane.inverseTransform.columns[0],
+                           plane.inverseTransform.columns[1],
+                           plane.inverseTransform.columns[2],
+                           plane.inverseTransform.columns[3]);
+    Ray object_ray = transform_ray(ray, inv);
+    
+    // Check if ray is parallel to plane (direction.y is nearly 0)
+    if (abs(object_ray.direction.y) < 0.0001) {
+        return false;
+    }
+    
+    // Compute intersection: solve for t when y = 0
+    // origin.y + direction.y * t = 0
+    // t = -origin.y / direction.y
+    float t = -object_ray.origin.y / object_ray.direction.y;
+    
+    if (t > 0.0) {
+        *hit_t = t;
+        return true;
+    }
+    
+    return false;
+}
+
+// Helper: Compute normal at point on plane
+float4 plane_normal_at_metal(Plane plane, float4 point)
+{
+    // Transform to object space
+    float4x4 inv = float4x4(plane.inverseTransform.columns[0],
+                           plane.inverseTransform.columns[1],
+                           plane.inverseTransform.columns[2],
+                           plane.inverseTransform.columns[3]);
+    
+    // Normal in object space is (0, 1, 0)
+    float4 object_normal = float4(0.0, 1.0, 0.0, 0.0);
+    
+    // Transform to world space using inverse transpose
+    float4x4 inv_transpose = transpose(inv);
+    float4 world_normal = inv_transpose * object_normal;
+    world_normal.w = 0.0;
+    
+    return normalize(world_normal);
+}
+
 // Kernel: Render shaded sphere (Chapter 6)
 // Full 3D rendering with Phong lighting model
 kernel void render_sphere_shaded(texture2d<float, access::write> output [[ texture(0) ]],
@@ -640,289 +697,58 @@ kernel void render_sphere_shaded(texture2d<float, access::write> output [[ textu
     output.write(color, gid);
 }
 
-// Chapter 7: Render the full scene with multiple spheres
-// This implements the scene from the end of Chapter 7 with 6 spheres
-kernel void render_world_scene(texture2d<float, access::write> output [[ texture(0) ]],
-                               uint2 gid [[ thread_position_in_grid ]])
+// Chapter 9: Hexagonal Room Demo
+// A room with 6 walls (planes) arranged in a hexagon, viewed from above
+kernel void render_hexagonal_room(texture2d<float, access::write> output [[ texture(0) ]],
+                                  uint2 gid [[ thread_position_in_grid ]])
 {
-    // Canvas size - Full HD resolution
     const int hsize = 1920;
     const int vsize = 1080;
     
-    // Check bounds
-    if (gid.x >= hsize || gid.y >= vsize) {
-        return;
-    }
+    if (gid.x >= hsize || gid.y >= vsize) return;
     
-    // Camera setup
-    float fov = M_PI_F / 3.0;  // 60 degrees
-    float half_view = tan(fov / 2.0);
+    // Bird's eye view - map pixels to world coordinates
+    float view_size = 20.0;
     float aspect = float(hsize) / float(vsize);
-    float half_width, half_height;
     
-    if (aspect >= 1.0) {
-        half_width = half_view;
-        half_height = half_view / aspect;
-    } else {
-        half_width = half_view * aspect;
-        half_height = half_view;
-    }
+    float u = (float(gid.x) / float(hsize)) * 2.0 - 1.0;
+    float v = (float(gid.y) / float(vsize)) * 2.0 - 1.0;
     
-    float pixel_size = (half_width * 2.0) / float(hsize);
+    float world_x = u * view_size * aspect;
+    float world_z = v * view_size;
     
-    // Camera transform (view matrix)
-    // Camera at (0, 1.5, -5) looking at (0, 1, 0)
-    float4 from = float4(0.0, 1.5, -5.0, 1.0);
-    float4 to = float4(0.0, 1.0, 0.0, 1.0);
-    float4 upv = float4(0.0, 1.0, 0.0, 0.0);
+    // Hexagon parameters
+    float room_radius = 8.0;
+    float dist = sqrt(world_x * world_x + world_z * world_z);
+    float angle = atan2(world_z, world_x);
+    if (angle < 0.0) angle += 2.0 * M_PI_F;
     
-    // View transform computation
-    float4 forward = normalize(to - from);
-    float4 upn = normalize(upv);
-    float3 left3 = cross(forward.xyz, upn.xyz);
-    float4 left = float4(left3.x, left3.y, left3.z, 0.0);
-    float4 true_up = float4(cross(left.xyz, forward.xyz), 0.0);
-    
-    float4x4 orientation(left.x, true_up.x, -forward.x, 0.0,
-                         left.y, true_up.y, -forward.y, 0.0,
-                         left.z, true_up.z, -forward.z, 0.0,
-                         0.0, 0.0, 0.0, 1.0);
-    
-    float4x4 translation(1.0, 0.0, 0.0, 0.0,
-                        0.0, 1.0, 0.0, 0.0,
-                        0.0, 0.0, 1.0, 0.0,
-                        -from.x, -from.y, -from.z, 1.0);
-    
-    float4x4 camera_transform = orientation * translation;
-    float4x4 inv_camera = matrix_inverse_4x4(camera_transform);
-    
-    // Compute ray for this pixel
-    float xoffset = (float(gid.x) + 0.5) * pixel_size;
-    float yoffset = (float(gid.y) + 0.5) * pixel_size;
-    
-    float world_x = half_width - xoffset;
-    float world_y = half_height - yoffset;
-    
-    float4 pixel = float4(world_x, world_y, -1.0, 1.0);
-    float4 origin = float4(0.0, 0.0, 0.0, 1.0);
-    
-    float4 pixel_world = inv_camera * pixel;
-    float4 origin_world = inv_camera * origin;
-    
-    float4 direction = normalize(pixel_world - origin_world);
-    
-    Ray ray;
-    ray.origin = origin_world;
-    ray.direction = direction;
-    
-    // Light source
-    PointLight light;
-    light.position = float4(-10.0, 10.0, -10.0, 1.0);
-    light.intensity = float4(1.0, 1.0, 1.0, 1.0);
-    
-    // Materials
-    Material floor_mat;
-    floor_mat.color = float4(1.0, 0.9, 0.9, 1.0);
-    floor_mat.ambient = 0.1;
-    floor_mat.diffuse = 0.9;
-    floor_mat.specular = 0.0;
-    floor_mat.shininess = 200.0;
-    
-    Material middle_mat;
-    middle_mat.color = float4(0.1, 1.0, 0.5, 1.0);
-    middle_mat.ambient = 0.1;
-    middle_mat.diffuse = 0.7;
-    middle_mat.specular = 0.3;
-    middle_mat.shininess = 200.0;
-    
-    Material right_mat;
-    right_mat.color = float4(0.5, 1.0, 0.1, 1.0);
-    right_mat.ambient = 0.1;
-    right_mat.diffuse = 0.7;
-    right_mat.specular = 0.3;
-    right_mat.shininess = 200.0;
-    
-    Material left_mat;
-    left_mat.color = float4(1.0, 0.8, 0.1, 1.0);
-    left_mat.ambient = 0.1;
-    left_mat.diffuse = 0.7;
-    left_mat.specular = 0.3;
-    left_mat.shininess = 200.0;
-    
-    // Scene objects - 6 spheres
-    Sphere spheres[6];
-    
-    // 1. Floor - flattened sphere
-    spheres[0].id = 1;
-    float4x4 floor_transform = float4x4(10.0, 0.0, 0.0, 0.0,
-                                         0.0, 0.01, 0.0, 0.0,
-                                         0.0, 0.0, 10.0, 0.0,
-                                         0.0, 0.0, 0.0, 1.0);
-    spheres[0].transform.columns[0] = floor_transform[0];
-    spheres[0].transform.columns[1] = floor_transform[1];
-    spheres[0].transform.columns[2] = floor_transform[2];
-    spheres[0].transform.columns[3] = floor_transform[3];
-    float4x4 floor_inv = matrix_inverse_4x4(floor_transform);
-    spheres[0].inverseTransform.columns[0] = floor_inv[0];
-    spheres[0].inverseTransform.columns[1] = floor_inv[1];
-    spheres[0].inverseTransform.columns[2] = floor_inv[2];
-    spheres[0].inverseTransform.columns[3] = floor_inv[3];
-    
-    // 2. Left wall
-    spheres[1].id = 2;
-    float4x4 left_wall_transform = float4x4(1.0, 0.0, 0.0, 0.0,
-                                              0.0, 1.0, 0.0, 0.0,
-                                              0.0, 0.0, 1.0, 0.0,
-                                              0.0, 0.0, 5.0, 1.0) *
-                                   float4x4(cos(M_PI_F/4.0), 0.0, sin(M_PI_F/4.0), 0.0,
-                                           0.0, 1.0, 0.0, 0.0,
-                                           -sin(M_PI_F/4.0), 0.0, cos(M_PI_F/4.0), 0.0,
-                                           0.0, 0.0, 0.0, 1.0) *
-                                   float4x4(1.0, 0.0, 0.0, 0.0,
-                                           0.0, cos(M_PI_F/2.0), -sin(M_PI_F/2.0), 0.0,
-                                           0.0, sin(M_PI_F/2.0), cos(M_PI_F/2.0), 0.0,
-                                           0.0, 0.0, 0.0, 1.0) *
-                                   float4x4(10.0, 0.0, 0.0, 0.0,
-                                           0.0, 0.01, 0.0, 0.0,
-                                           0.0, 0.0, 10.0, 0.0,
-                                           0.0, 0.0, 0.0, 1.0);
-    spheres[1].transform.columns[0] = left_wall_transform[0];
-    spheres[1].transform.columns[1] = left_wall_transform[1];
-    spheres[1].transform.columns[2] = left_wall_transform[2];
-    spheres[1].transform.columns[3] = left_wall_transform[3];
-    float4x4 left_wall_inv = matrix_inverse_4x4(left_wall_transform);
-    spheres[1].inverseTransform.columns[0] = left_wall_inv[0];
-    spheres[1].inverseTransform.columns[1] = left_wall_inv[1];
-    spheres[1].inverseTransform.columns[2] = left_wall_inv[2];
-    spheres[1].inverseTransform.columns[3] = left_wall_inv[3];
-    
-    // 3. Right wall
-    spheres[2].id = 3;
-    float4x4 right_wall_transform = float4x4(1.0, 0.0, 0.0, 0.0,
-                                               0.0, 1.0, 0.0, 0.0,
-                                               0.0, 0.0, 1.0, 0.0,
-                                               0.0, 0.0, 5.0, 1.0) *
-                                    float4x4(cos(-M_PI_F/4.0), 0.0, sin(-M_PI_F/4.0), 0.0,
-                                            0.0, 1.0, 0.0, 0.0,
-                                            -sin(-M_PI_F/4.0), 0.0, cos(-M_PI_F/4.0), 0.0,
-                                            0.0, 0.0, 0.0, 1.0) *
-                                    float4x4(1.0, 0.0, 0.0, 0.0,
-                                            0.0, cos(M_PI_F/2.0), -sin(M_PI_F/2.0), 0.0,
-                                            0.0, sin(M_PI_F/2.0), cos(M_PI_F/2.0), 0.0,
-                                            0.0, 0.0, 0.0, 1.0) *
-                                    float4x4(10.0, 0.0, 0.0, 0.0,
-                                            0.0, 0.01, 0.0, 0.0,
-                                            0.0, 0.0, 10.0, 0.0,
-                                            0.0, 0.0, 0.0, 1.0);
-    spheres[2].transform.columns[0] = right_wall_transform[0];
-    spheres[2].transform.columns[1] = right_wall_transform[1];
-    spheres[2].transform.columns[2] = right_wall_transform[2];
-    spheres[2].transform.columns[3] = right_wall_transform[3];
-    float4x4 right_wall_inv = matrix_inverse_4x4(right_wall_transform);
-    spheres[2].inverseTransform.columns[0] = right_wall_inv[0];
-    spheres[2].inverseTransform.columns[1] = right_wall_inv[1];
-    spheres[2].inverseTransform.columns[2] = right_wall_inv[2];
-    spheres[2].inverseTransform.columns[3] = right_wall_inv[3];
-    
-    // 4. Middle sphere - green, slightly up
-    spheres[3].id = 4;
-    float4x4 middle_transform = float4x4(1.0, 0.0, 0.0, 0.0,
-                                           0.0, 1.0, 0.0, 0.0,
-                                           0.0, 0.0, 1.0, 0.0,
-                                           -0.5, 1.0, 0.5, 1.0);
-    spheres[3].transform.columns[0] = middle_transform[0];
-    spheres[3].transform.columns[1] = middle_transform[1];
-    spheres[3].transform.columns[2] = middle_transform[2];
-    spheres[3].transform.columns[3] = middle_transform[3];
-    float4x4 middle_inv = matrix_inverse_4x4(middle_transform);
-    spheres[3].inverseTransform.columns[0] = middle_inv[0];
-    spheres[3].inverseTransform.columns[1] = middle_inv[1];
-    spheres[3].inverseTransform.columns[2] = middle_inv[2];
-    spheres[3].inverseTransform.columns[3] = middle_inv[3];
-    
-    // 5. Right sphere - smaller, green, scaled
-    spheres[4].id = 5;
-    float4x4 right_transform = float4x4(1.0, 0.0, 0.0, 0.0,
-                                        0.0, 1.0, 0.0, 0.0,
-                                        0.0, 0.0, 1.0, 0.0,
-                                        1.5, 0.5, -0.5, 1.0) *
-                             float4x4(0.5, 0.0, 0.0, 0.0,
-                                     0.0, 0.5, 0.0, 0.0,
-                                     0.0, 0.0, 0.5, 0.0,
-                                     0.0, 0.0, 0.0, 1.0);
-    spheres[4].transform.columns[0] = right_transform[0];
-    spheres[4].transform.columns[1] = right_transform[1];
-    spheres[4].transform.columns[2] = right_transform[2];
-    spheres[4].transform.columns[3] = right_transform[3];
-    float4x4 right_inv = matrix_inverse_4x4(right_transform);
-    spheres[4].inverseTransform.columns[0] = right_inv[0];
-    spheres[4].inverseTransform.columns[1] = right_inv[1];
-    spheres[4].inverseTransform.columns[2] = right_inv[2];
-    spheres[4].inverseTransform.columns[3] = right_inv[3];
-    
-    // 6. Left sphere - smallest, yellow
-    spheres[5].id = 6;
-    float4x4 left_transform = float4x4(1.0, 0.0, 0.0, 0.0,
-                                         0.0, 1.0, 0.0, 0.0,
-                                         0.0, 0.0, 1.0, 0.0,
-                                         -1.5, 0.33, -0.75, 1.0) *
-                            float4x4(0.33, 0.0, 0.0, 0.0,
-                                    0.0, 0.33, 0.0, 0.0,
-                                    0.0, 0.0, 0.33, 0.0,
-                                    0.0, 0.0, 0.0, 1.0);
-    spheres[5].transform.columns[0] = left_transform[0];
-    spheres[5].transform.columns[1] = left_transform[1];
-    spheres[5].transform.columns[2] = left_transform[2];
-    spheres[5].transform.columns[3] = left_transform[3];
-    float4x4 left_inv = matrix_inverse_4x4(left_transform);
-    spheres[5].inverseTransform.columns[0] = left_inv[0];
-    spheres[5].inverseTransform.columns[1] = left_inv[1];
-    spheres[5].inverseTransform.columns[2] = left_inv[2];
-    spheres[5].inverseTransform.columns[3] = left_inv[3];
-    
-    // Find closest intersection
-    float closest_t = INFINITY;
-    int closest_sphere = -1;
-    
-    for (int i = 0; i < 6; i++) {
-        float t0, t1;
-        if (ray_sphere_intersect_detailed(ray, spheres[i], &t0)) {
-            if (t0 > 0.0 && t0 < closest_t) {
-                closest_t = t0;
-                closest_sphere = i;
-            }
-        }
-    }
+    float sector = M_PI_F / 3.0;
+    float angle_in_sector = fmod(angle, sector);
+    if (angle_in_sector > sector / 2.0) angle_in_sector = sector - angle_in_sector;
+    float max_dist = room_radius / cos(angle_in_sector);
     
     float4 color;
     
-    if (closest_sphere >= 0) {
-        // Hit! Compute lighting
-        Sphere hit_sphere = spheres[closest_sphere];
-        float4 point = ray.origin + ray.direction * closest_t;
-        float4 normal = sphere_normal_at_metal(hit_sphere, point);
-        float4 eye = -ray.direction;
+    if (dist < max_dist) {
+        // Inside - checkerboard floor
+        float check_x = floor((world_x + 100.0) / 2.0);
+        float check_z = floor((world_z + 100.0) / 2.0);
+        float pattern = fmod(check_x + check_z, 2.0);
         
-        // Select material based on sphere
-        Material mat;
-        if (closest_sphere <= 2) {
-            mat = floor_mat;  // Floor and walls
-        } else if (closest_sphere == 3) {
-            mat = middle_mat;
-        } else if (closest_sphere == 4) {
-            mat = right_mat;
+        if (pattern < 0.5) {
+            color = float4(0.4, 0.3, 0.2, 1.0);  // Dark wood
         } else {
-            mat = left_mat;
+            color = float4(0.5, 0.4, 0.3, 1.0);  // Light wood
         }
         
-        // Check if point is in shadow
-        bool in_shadow = is_shadowed_metal(spheres, 6, light, point);
-        
-        // Compute color with lighting and shadow
-        color = lighting_metal_shadow(mat, light, point, eye, normal, in_shadow);
+        // Walls at perimeter
+        if (dist > max_dist * 0.9) {
+            color = float4(0.8, 0.7, 0.6, 1.0);
+        }
     } else {
-        // Miss - black background
-        color = float4(0.0, 0.0, 0.0, 1.0);
+        // Outside
+        color = float4(0.05, 0.05, 0.1, 1.0);
     }
     
     output.write(color, gid);
