@@ -41,16 +41,10 @@ vertexShader(uint vertexID [[vertex_id]],
 fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                texture2d<float> sphereTexture [[ texture(0) ]])
 {
-    constexpr sampler textureSampler (mag_filter::linear, min_filter::linear);
+    constexpr sampler textureSampler (mag_filter::nearest, min_filter::nearest);
     
     // Sample from the sphere texture using texture coordinates
     float4 color = sphereTexture.sample(textureSampler, in.textureCoordinate);
-    
-    // DEBUG: If texture is dark/transparent, show a test pattern
-    if (color.r < 0.1 && color.g < 0.1 && color.b < 0.1) {
-        // Texture wasn't written to - show UV coordinates as colors
-        return float4(in.textureCoordinate.x, in.textureCoordinate.y, 0.5, 1.0);
-    }
     
     return color;
 }
@@ -764,150 +758,71 @@ kernel void render_patterns_demo(texture2d<float, access::write> output [[ textu
     
     if (gid.x >= hsize || gid.y >= vsize) return;
     
-    // Setup camera for scene view
-    float fov = M_PI_F / 3.0;
-    float half_view = tan(fov / 2.0);
-    float aspect = (float)hsize / (float)vsize;
-    float half_width, half_height;
+    // Camera at z=-8 shooting toward wall at z=5 (closer wall)
+    float4 ray_origin = float4(0, 1, -8, 1);
+    float wall_z = 5.0;
+    float wall_size = 10.0;
+    float pixel_size = wall_size / vsize;
     
-    if (aspect >= 1.0) {
-        half_width = half_view;
-        half_height = half_view / aspect;
-    } else {
-        half_width = half_view * aspect;
-        half_height = half_view;
-    }
+    float world_x = -wall_size/2.0 + pixel_size * gid.x;
+    float world_y = wall_size/2.0 - pixel_size * gid.y;
+    float4 wall_pos = float4(world_x, world_y, wall_z, 1);
     
-    float pixel_size = (half_width * 2.0) / (float)hsize;
-    
-    // Camera position
-    float4 camera_pos = float4(0, 3, -8, 1);
-    float4 look_at = float4(0, 1, 0, 1);
-    float4 up = float4(0, 1, 0, 0);
-    
-    // Compute pixel position on canvas
-    float xoffset = (gid.x + 0.5) * pixel_size - half_width;
-    float yoffset = half_height - (gid.y + 0.5) * pixel_size;
-    
-    // Ray direction
-    float4 pixel_world = float4(xoffset, yoffset, -1, 1);
-    float4 ray_origin = camera_pos;
-    float4 ray_direction = normalize(pixel_world - ray_origin);
+    float4 ray_direction = normalize(wall_pos - ray_origin);
     
     Ray ray;
     ray.origin = ray_origin;
     ray.direction = ray_direction;
     
-    // Light source
+    // Light
     PointLight light;
-    light.position = float4(-5, 8, -8, 1);
+    light.position = float4(-10, 10, -10, 1);
     light.intensity = float4(1, 1, 1, 1);
     
-    // Create 4 spheres with different patterns
+    // 4 spheres with patterns
     Sphere spheres[4];
-    
-    // Sphere 1: Left, stripe pattern (scaled to make wider stripes)
-    spheres[0].id = 1;
-    float4x4 stripe_scale = float4x4(0.5, 0, 0, 0,
-                                      0, 0.5, 0, 0,
-                                      0, 0, 0.5, 0,
-                                      0, 0, 0, 1);
-    float4x4 stripe_trans = float4x4(1, 0, 0, 0,
-                                      0, 1, 0, 0,
-                                      0, 0, 1, 0,
-                                      -2, 1, 0, 1);
-    float4x4 stripe_result = stripe_trans * stripe_scale;
-    spheres[0].transform.columns[0] = stripe_result[0];
-    spheres[0].transform.columns[1] = stripe_result[1];
-    spheres[0].transform.columns[2] = stripe_result[2];
-    spheres[0].transform.columns[3] = stripe_result[3];
-    float4x4 stripe_inv = matrix_inverse_4x4(stripe_result);
-    spheres[0].inverseTransform.columns[0] = stripe_inv[0];
-    spheres[0].inverseTransform.columns[1] = stripe_inv[1];
-    spheres[0].inverseTransform.columns[2] = stripe_inv[2];
-    spheres[0].inverseTransform.columns[3] = stripe_inv[3];
-    
-    // Sphere 2: Center-left, gradient pattern
-    spheres[1].id = 2;
-    float4x4 grad_scale = float4x4(0.5, 0, 0, 0,
-                                    0, 0.5, 0, 0,
-                                    0, 0, 0.5, 0,
-                                    0, 0, 0, 1);
-    float4x4 grad_trans = float4x4(1, 0, 0, 0,
-                                    0, 1, 0, 0,
-                                    0, 0, 1, 0,
-                                    -0.7, 1, 0, 1);
-    float4x4 grad_result = grad_trans * grad_scale;
-    spheres[1].transform.columns[0] = grad_result[0];
-    spheres[1].transform.columns[1] = grad_result[1];
-    spheres[1].transform.columns[2] = grad_result[2];
-    spheres[1].transform.columns[3] = grad_result[3];
-    float4x4 grad_inv = matrix_inverse_4x4(grad_result);
-    spheres[1].inverseTransform.columns[0] = grad_inv[0];
-    spheres[1].inverseTransform.columns[1] = grad_inv[1];
-    spheres[1].inverseTransform.columns[2] = grad_inv[2];
-    spheres[1].inverseTransform.columns[3] = grad_inv[3];
-    
-    // Sphere 3: Center-right, ring pattern
-    spheres[2].id = 3;
-    float4x4 ring_scale = float4x4(0.5, 0, 0, 0,
-                                    0, 0.5, 0, 0,
-                                    0, 0, 0.5, 0,
-                                    0, 0, 0, 1);
-    float4x4 ring_trans = float4x4(1, 0, 0, 0,
-                                    0, 1, 0, 0,
-                                    0, 0, 1, 0,
-                                    0.7, 1, 0, 1);
-    float4x4 ring_result = ring_trans * ring_scale;
-    spheres[2].transform.columns[0] = ring_result[0];
-    spheres[2].transform.columns[1] = ring_result[1];
-    spheres[2].transform.columns[2] = ring_result[2];
-    spheres[2].transform.columns[3] = ring_result[3];
-    float4x4 ring_inv = matrix_inverse_4x4(ring_result);
-    spheres[2].inverseTransform.columns[0] = ring_inv[0];
-    spheres[2].inverseTransform.columns[1] = ring_inv[1];
-    spheres[2].inverseTransform.columns[2] = ring_inv[2];
-    spheres[2].inverseTransform.columns[3] = ring_inv[3];
-    
-    // Sphere 4: Right, checker pattern
-    spheres[3].id = 4;
-    float4x4 check_scale = float4x4(0.5, 0, 0, 0,
-                                     0, 0.5, 0, 0,
-                                     0, 0, 0.5, 0,
-                                     0, 0, 0, 1);
-    float4x4 check_trans = float4x4(1, 0, 0, 0,
-                                     0, 1, 0, 0,
-                                     0, 0, 1, 0,
-                                     2, 1, 0, 1);
-    float4x4 check_result = check_trans * check_scale;
-    spheres[3].transform.columns[0] = check_result[0];
-    spheres[3].transform.columns[1] = check_result[1];
-    spheres[3].transform.columns[2] = check_result[2];
-    spheres[3].transform.columns[3] = check_result[3];
-    float4x4 check_inv = matrix_inverse_4x4(check_result);
-    spheres[3].inverseTransform.columns[0] = check_inv[0];
-    spheres[3].inverseTransform.columns[1] = check_inv[1];
-    spheres[3].inverseTransform.columns[2] = check_inv[2];
-    spheres[3].inverseTransform.columns[3] = check_inv[3];
-    
-    // Pattern colors
     float4 white = float4(1, 1, 1, 1);
     float4 black = float4(0.1, 0.1, 0.1, 1);
-    float4 red = float4(1, 0.2, 0.2, 1);
-    float4 blue = float4(0.2, 0.2, 1, 1);
+    float4 red = float4(1, 0.3, 0.3, 1);
+    float4 blue = float4(0.3, 0.3, 1, 1);
     
-    // Find closest intersection
-    float closest_t = 1000000.0;
-    int hit_sphere_id = -1;
-    float4 hit_point;
-    float4 hit_normal;
+    // Helper to create a sphere with transform
+    auto make_sphere = [&](int id, float tx, float ty, float tz, float scale) -> Sphere {
+        Sphere s;
+        s.id = id;
+        float4x4 mat = float4x4(scale, 0, 0, 0,
+                                0, scale, 0, 0,
+                                0, 0, scale, 0,
+                                tx, ty, tz, 1);
+        s.transform.columns[0] = mat[0];
+        s.transform.columns[1] = mat[1];
+        s.transform.columns[2] = mat[2];
+        s.transform.columns[3] = mat[3];
+        float4x4 inv = matrix_inverse_4x4(mat);
+        s.inverseTransform.columns[0] = inv[0];
+        s.inverseTransform.columns[1] = inv[1];
+        s.inverseTransform.columns[2] = inv[2];
+        s.inverseTransform.columns[3] = inv[3];
+        return s;
+    };
+    
+    // Spheres arranged left to right, closer together
+    spheres[0] = make_sphere(1, -2.5, 1, 0, 0.5);  // Stripe (leftmost)
+    spheres[1] = make_sphere(2, -0.8, 1, 0, 0.5);   // Gradient
+    spheres[2] = make_sphere(3, 0.8, 1, 0, 0.5);   // Ring
+    spheres[3] = make_sphere(4, 2.5, 1, 0, 0.5);   // Checker (rightmost)
+    
+    // Find closest hit
+    float closest_t = 999999.0;
+    int hit_id = -1;
+    float4 hit_point, hit_normal;
     
     for (int i = 0; i < 4; i++) {
         float t;
         if (ray_sphere_intersect_detailed(ray, spheres[i], &t)) {
-            if (t < closest_t && t > 0) {
+            if (t > 0.001 && t < closest_t) {
                 closest_t = t;
-                hit_sphere_id = spheres[i].id;
+                hit_id = spheres[i].id;
                 hit_point = ray.origin + ray.direction * t;
                 hit_normal = sphere_normal_at_metal(spheres[i], hit_point);
             }
@@ -916,82 +831,61 @@ kernel void render_patterns_demo(texture2d<float, access::write> output [[ textu
     
     float4 color;
     
-    if (hit_sphere_id != -1) {
-        // Compute eye vector
+    if (hit_id != -1) {
         float4 eye = -ray.direction;
+        Sphere hit_sphere = spheres[hit_id - 1];
         
-        // Compute pattern color based on which sphere was hit
-        // Transform hit point to object space for pattern evaluation
-        Sphere hit_sphere = spheres[hit_sphere_id - 1];
+        // Transform to object space
         float4x4 inv = float4x4(hit_sphere.inverseTransform.columns[0],
                                 hit_sphere.inverseTransform.columns[1],
                                 hit_sphere.inverseTransform.columns[2],
                                 hit_sphere.inverseTransform.columns[3]);
-        float4 object_point = inv * hit_point;
+        float4 obj_pt = inv * hit_point;
         
-        float4 pattern_color;
-        
-        switch (hit_sphere_id) {
-            case 1: { // Stripe pattern - scaled wider
-                float4 pattern_point = object_point * 0.5; // Scale pattern
-                int stripe_index = (int)floor(fabs(pattern_point.x));
-                if (stripe_index % 2 == 0) {
-                    pattern_color = white;
-                } else {
-                    pattern_color = black;
-                }
+        float4 pat_col;
+        switch (hit_id) {
+            case 1: { // Stripe
+                float stripe_pt = obj_pt.x * 2.0;
+                int idx = int(floor(abs(stripe_pt)));
+                pat_col = (idx % 2 == 0) ? white : black;
                 break;
             }
-            case 2: { // Gradient pattern - red to blue
-                float4 pattern_point = object_point;
-                float distance = pattern_point.x - floor(pattern_point.x);
-                pattern_color = red + (blue - red) * distance;
-                pattern_color.w = 1.0;
+            case 2: { // Gradient
+                float dist = obj_pt.x - floor(obj_pt.x);
+                pat_col = red + (blue - red) * dist;
+                pat_col.w = 1.0;
                 break;
             }
-            case 3: { // Ring pattern - concentric circles
-                float4 pattern_point = object_point;
-                float distance = sqrt(pattern_point.x * pattern_point.x + pattern_point.z * pattern_point.z);
-                int ring_index = (int)floor(distance);
-                if (ring_index % 2 == 0) {
-                    pattern_color = white;
-                } else {
-                    pattern_color = black;
-                }
+            case 3: { // Ring - concentric circles around Z axis (visible from front)
+                // Rings based on distance from Z axis in XY plane
+                float dist = sqrt(obj_pt.x * obj_pt.x + obj_pt.y * obj_pt.y);
+                int idx = int(floor(dist * 3.0)); // Scale to get ~3-4 rings
+                pat_col = (idx % 2 == 0) ? white : black;
                 break;
             }
-            case 4: { // Checker pattern
-                float4 pattern_point = object_point;
-                int x_index = (int)floor(pattern_point.x);
-                int y_index = (int)floor(pattern_point.y);
-                int z_index = (int)floor(pattern_point.z);
-                if ((x_index + y_index + z_index) % 2 == 0) {
-                    pattern_color = white;
-                } else {
-                    pattern_color = black;
-                }
+            case 4: { // Checker
+                int xi = int(floor(obj_pt.x));
+                int yi = int(floor(obj_pt.y));
+                int zi = int(floor(obj_pt.z));
+                pat_col = ((xi + yi + zi) % 2 == 0) ? white : black;
                 break;
             }
-            default:
-                pattern_color = white;
+            default: pat_col = white;
         }
         
-        // Create material with pattern color
-        Material material;
-        material.color = pattern_color;
-        material.ambient = 0.1;
-        material.diffuse = 0.9;
-        material.specular = 0.9;
-        material.shininess = 200.0;
+        Material mat;
+        mat.color = pat_col;
+        mat.ambient = 0.1;
+        mat.diffuse = 0.9;
+        mat.specular = 0.9;
+        mat.shininess = 200.0;
         
-        // Check shadow
-        bool in_shadow = is_shadowed_metal(spheres, 4, light, hit_point);
-        
-        // Compute lighting
-        color = lighting_metal_shadow(material, light, hit_point, eye, hit_normal, in_shadow);
+        bool shadow = is_shadowed_metal(spheres, 4, light, hit_point);
+        color = lighting_metal_shadow(mat, light, hit_point, eye, hit_normal, shadow);
     } else {
-        // Background - dark gray
-        color = float4(0.1, 0.1, 0.15, 1.0);
+        // Sky gradient
+        float t = float(gid.y) / float(vsize);
+        color = float4(0.05, 0.05, 0.1 + 0.1 * t, 1.0);
     }
     
     output.write(color, gid);

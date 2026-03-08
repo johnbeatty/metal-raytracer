@@ -71,8 +71,11 @@
     // Chapter 10: Create compute pipeline for patterns demo
     id<MTLFunction> computeFunction = [defaultLibrary newFunctionWithName:@"render_patterns_demo"];
     if (computeFunction) {
+        NSLog(@"Found compute function 'render_patterns_demo'");
         _computePipelineState = [_device newComputePipelineStateWithFunction:computeFunction error:&error];
-        if (!_computePipelineState) {
+        if (_computePipelineState) {
+            NSLog(@"Successfully created compute pipeline");
+        } else {
             NSLog(@"Failed to create compute pipeline state: %@", error);
         }
     } else {
@@ -124,6 +127,8 @@
         return;
     }
     
+    NSLog(@"Starting compute shader dispatch...");
+    
     id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
     commandBuffer.label = @"SphereSilhouetteCommand";
     
@@ -134,6 +139,8 @@
     // Dispatch 1920x1080 threads (one per pixel) - Full HD resolution
     MTLSize threadsPerThreadgroup = MTLSizeMake(16, 16, 1);
     MTLSize threadgroups = MTLSizeMake((1920 + 15) / 16, (1080 + 15) / 16, 1);
+    
+    NSLog(@"Dispatching %zu x %zu threadgroups", threadgroups.width, threadgroups.height);
     
     [computeEncoder dispatchThreadgroups:threadgroups threadsPerThreadgroup:threadsPerThreadgroup];
     [computeEncoder endEncoding];
