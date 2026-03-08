@@ -13,6 +13,8 @@ macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses 
 - Compute shaders need forward declarations when functions call each other
 - `half` is a reserved keyword in Metal - use `half_size` instead
 - For top-down camera views, simple projection math is more reliable than full view transforms
+- Pattern struct must be named `SurfacePattern` to avoid conflict with macOS QuickDraw's `Pattern` type
+- Fragment shader debug fallbacks can mask compute shader issues - better to show raw texture output
 
 ## Accomplished
 
