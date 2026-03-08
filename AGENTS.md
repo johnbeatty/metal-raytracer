@@ -33,7 +33,14 @@ macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses 
 12. **Chapter 13**: Cylinders - 18 tests (CylinderTests.m)
 13. **Chapter 14**: Groups - 10 tests (GroupTests.m)
 
-**Total: 201 tests passing** ✓
+**Visual Demos:**
+- Hexagonal room with wood floor (Chapter 9)
+- Four spheres with patterns: stripes, gradient, rings, checkers (Chapter 10)
+- Animated reflection/refraction: Mirror sphere, glass sphere, 4 colored spheres (Chapter 11)
+- Cube room: Wood room with table, boxes on floor, red box on table (Chapter 12)
+- **Hexagon model**: 6 golden spheres + 6 silver cylinders forming connected hexagon (Chapter 14)
+
+**Total: 204 tests passing** ✓
 
 ## Build Commands
 
@@ -213,9 +220,10 @@ All chapters from "The Ray Tracer Challenge" Book 1 have been completed!
 
 ## Current Working State
 
-- All 201 tests passing
+- All 204 tests passing
 - Group hierarchy system fully implemented
 - All shape types supported: Spheres, Planes, Cubes, Cylinders, and Groups
+- **Hexagon demo complete**: Connected hexagon of 6 spheres and 6 cylinders
 - Complete ray tracing implementation including:
   - Tuples, Vectors, Matrices, Transformations
   - Ray-sphere intersections with transformations
