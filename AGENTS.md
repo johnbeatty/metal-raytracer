@@ -183,6 +183,11 @@ kernel void tuple_add(device const Tuple* a [[buffer(0)]],
 │   ├── WorldTests.m       # Chapter 7: World system
 │   ├── ShadowTests.m      # Chapter 8: Shadows
 │   ├── PlaneTests.m       # Chapter 9: Planes
+│   ├── PatternTests.m     # Chapter 10: Patterns
+│   ├── ReflectionRefractionTests.m # Chapter 11: Reflection & Refraction
+│   ├── CubeTests.m        # Chapter 12: Cubes
+│   ├── CylinderTests.m    # Chapter 13: Cylinders
+│   ├── GroupTests.m       # Chapter 14: Groups
 │   └── main.m             # Test entry point
 └── build/                 # Build output (generated)
     └── RayTracer.app      # macOS app bundle
@@ -217,6 +222,28 @@ kernel void tuple_add(device const Tuple* a [[buffer(0)]],
 ## Next Chapters Available
 
 All chapters from "The Ray Tracer Challenge" Book 1 have been completed!
+
+## TODO List - Potential Improvements & Book 2 Features
+
+### High Priority
+- [ ] **Triangle meshes** - Support for triangle-based geometry
+- [ ] **OBJ file loading** - Import 3D models from OBJ files
+- [ ] **Bounding boxes** - Acceleration structures for faster ray-scene intersection
+- [ ] **CSG operations** - Constructive solid geometry (union, intersection, difference)
+
+### Medium Priority  
+- [ ] **Cones** - Truncated or infinite cone primitives
+- [ ] **Area lights** - Soft shadows with area light sources
+- [ ] **Texture mapping** - Image-based textures on materials
+- [ ] **Anti-aliasing** - Multi-sampling for smoother edges
+
+### Low Priority / Advanced
+- [ ] **Bump/normal maps** - Surface detail without extra geometry
+- [ ] **Depth of field** - Camera focus effects
+- [ ] **Motion blur** - Object/camera movement blur
+- [ ] **Procedural textures** - Noise-based textures (Perlin, etc.)
+- [ ] **Global illumination** - Path tracing or photon mapping
+- [ ] **Adaptive subdivision** - Dynamic mesh refinement
 
 ## Current Working State
 
