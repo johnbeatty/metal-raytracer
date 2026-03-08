@@ -38,6 +38,7 @@ macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses 
 - Hexagonal room with wood floor, viewed from above (Chapter 9)
 - Four spheres with different patterns: stripes, gradient, rings, checkers (Chapter 10)
 - **Animated reflection/refraction demo**: Mirror sphere, glass sphere, 4 colored spheres with smooth camera panning (Chapter 11)
+- **Cube room demo**: Wood room with table, box on table, scattered boxes (Chapter 12)
 
 **Total: 173 tests passing** ✓
 
@@ -222,7 +223,8 @@ kernel void tuple_add(device const Tuple* a [[buffer(0)]],
 
 - All 173 tests passing
 - Cube geometry fully implemented (intersection, normals, transformations)
-- Ready for demo scene with cubes
+- **Cube room demo complete**: Wood room with table, boxes on floor, red box on table
+- Real-time rendering with optimized lighting
 - Ready for Chapter 13: Cylinders or user-directed improvements
 
 ## Dependencies
