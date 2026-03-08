@@ -13,9 +13,13 @@
     // Chapter 5: Sphere silhouette rendering
     id<MTLComputePipelineState> _computePipelineState;
     id<MTLTexture> _sphereTexture;
+    
+    // Chapter 11: Camera animation
+    id<MTLBuffer> _timeBuffer;
+    float _time;
 }
 
-- (nonnull instancetype)initWithMetalKitView:(nonnull MTKView *)mtkView
+    - (nonnull instancetype)initWithMetalKitView:(nonnull MTKView *)mtkView
 {
     self = [super init];
     if(self)
@@ -23,9 +27,13 @@
         _device = mtkView.device;
         _commandQueue = [_device newCommandQueue];
         
+        // Chapter 11: Initialize time tracking
+        _time = 0.0f;
+        _timeBuffer = [_device newBufferWithLength:sizeof(float) 
+                                           options:MTLResourceStorageModeShared];
+        
         [self loadMetal:mtkView];
         [self buildMesh];
-        [self renderSphereSilhouette];
     }
     return self;
 }
@@ -68,10 +76,10 @@
         NSLog(@"Failed to created pipeline state, error %@", error);
     }
     
-    // Chapter 10: Create compute pipeline for patterns demo
-    id<MTLFunction> computeFunction = [defaultLibrary newFunctionWithName:@"render_patterns_demo"];
+    // Chapter 11: Create compute pipeline for reflection/refraction demo
+    id<MTLFunction> computeFunction = [defaultLibrary newFunctionWithName:@"render_reflection_refraction_demo"];
     if (computeFunction) {
-        NSLog(@"Found compute function 'render_patterns_demo'");
+        NSLog(@"Found compute function 'render_reflection_refraction_demo'");
         _computePipelineState = [_device newComputePipelineStateWithFunction:computeFunction error:&error];
         if (_computePipelineState) {
             NSLog(@"Successfully created compute pipeline");
@@ -79,7 +87,7 @@
             NSLog(@"Failed to create compute pipeline state: %@", error);
         }
     } else {
-        NSLog(@"Failed to find compute function 'render_patterns_demo'");
+        NSLog(@"Failed to find compute function 'render_reflection_refraction_demo'");
     }
     
     // Chapter 5: Create texture for sphere rendering
@@ -119,15 +127,17 @@
     _viewportSize.y = size.height;
 }
 
-// Chapter 5: Render sphere silhouette using compute shader
+// Chapter 11: Render with animated camera using compute shader
 - (void)renderSphereSilhouette
 {
-    if (!_computePipelineState || !_sphereTexture) {
-        NSLog(@"Cannot render sphere: compute pipeline or texture not ready");
+    if (!_computePipelineState || !_sphereTexture || !_timeBuffer) {
+        NSLog(@"Cannot render: compute pipeline, texture, or time buffer not ready");
         return;
     }
     
-    NSLog(@"Starting compute shader dispatch...");
+    // Update time value in buffer
+    float* timePtr = (float*)[_timeBuffer contents];
+    *timePtr = _time;
     
     id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
     commandBuffer.label = @"SphereSilhouetteCommand";
@@ -135,24 +145,26 @@
     id<MTLComputeCommandEncoder> computeEncoder = [commandBuffer computeCommandEncoder];
     [computeEncoder setComputePipelineState:_computePipelineState];
     [computeEncoder setTexture:_sphereTexture atIndex:0];
+    [computeEncoder setBuffer:_timeBuffer offset:0 atIndex:1];  // Pass time to shader
     
     // Dispatch 1920x1080 threads (one per pixel) - Full HD resolution
     MTLSize threadsPerThreadgroup = MTLSizeMake(16, 16, 1);
     MTLSize threadgroups = MTLSizeMake((1920 + 15) / 16, (1080 + 15) / 16, 1);
     
-    NSLog(@"Dispatching %zu x %zu threadgroups", threadgroups.width, threadgroups.height);
-    
     [computeEncoder dispatchThreadgroups:threadgroups threadsPerThreadgroup:threadsPerThreadgroup];
     [computeEncoder endEncoding];
     
     [commandBuffer commit];
-    [commandBuffer waitUntilCompleted];
     
-    NSLog(@"Patterns demo rendered to texture");
+    // Increment time for next frame (60fps -> increment by 1/60 each frame)
+    _time += 0.016f;
 }
 
 - (void)drawInMTKView:(nonnull MTKView *)view
 {
+    // Chapter 11: Re-render the scene every frame with updated camera position
+    [self renderSphereSilhouette];
+    
     id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
     commandBuffer.label = @"MyCommand";
     

@@ -890,3 +890,221 @@ kernel void render_patterns_demo(texture2d<float, access::write> output [[ textu
     
     output.write(color, gid);
 }
+
+// Chapter 11: Reflection & Refraction demo with animated camera
+// Renders a scene with a mirror sphere, glass sphere, and colored spheres
+// Camera pans back and forth to show real-time rendering speed
+kernel void render_reflection_refraction_demo(texture2d<float, access::write> output [[ texture(0) ]],
+                                               constant float &time [[ buffer(1) ]],
+                                               uint2 gid [[ thread_position_in_grid ]])
+{
+    const int hsize = 1920;
+    const int vsize = 1080;
+    
+    if (gid.x >= hsize || gid.y >= vsize) return;
+    
+    // Camera animation: pans back and forth in an arc
+    // Time parameter drives the camera position
+    float angle = sin(time * 0.5) * 0.3;  // Oscillates between -0.3 and 0.3 radians
+    float cam_x = sin(angle) * 8.0;  // X position oscillates
+    float cam_z = -cos(angle) * 8.0;   // Z position stays negative (looking at scene)
+    
+    float4 ray_origin = float4(cam_x, 1.5, cam_z, 1);
+    float wall_z = 5.0;
+    float wall_size = 10.0;
+    float pixel_size = wall_size / vsize;
+    
+    float world_x = -wall_size/2.0 + pixel_size * gid.x;
+    float world_y = wall_size/2.0 - pixel_size * gid.y;
+    float4 wall_pos = float4(world_x, world_y, wall_z, 1);
+    
+    float4 ray_direction = normalize(wall_pos - ray_origin);
+    
+    Ray ray;
+    ray.origin = ray_origin;
+    ray.direction = ray_direction;
+    
+    // Light
+    PointLight light;
+    light.position = float4(-10, 15, -10, 1);
+    light.intensity = float4(1, 1, 1, 1);
+    
+    // Colors
+    float4 white = float4(1, 1, 1, 1);
+    float4 red = float4(1, 0.2, 0.2, 1);
+    float4 green = float4(0.2, 1, 0.2, 1);
+    float4 blue = float4(0.2, 0.2, 1, 1);
+    float4 yellow = float4(1, 1, 0.2, 1);
+    
+    // Create 6 spheres: 2 special (mirror, glass), 4 colored
+    Sphere spheres[6];
+    Material materials[6];
+    
+    // Helper to create a sphere with transform
+    auto make_sphere = [&](int id, float tx, float ty, float tz, float scale) -> Sphere {
+        Sphere s;
+        s.id = id;
+        float4x4 mat = float4x4(scale, 0, 0, 0,
+                                0, scale, 0, 0,
+                                0, 0, scale, 0,
+                                tx, ty, tz, 1);
+        s.transform.columns[0] = mat[0];
+        s.transform.columns[1] = mat[1];
+        s.transform.columns[2] = mat[2];
+        s.transform.columns[3] = mat[3];
+        float4x4 inv = matrix_inverse_4x4(mat);
+        s.inverseTransform.columns[0] = inv[0];
+        s.inverseTransform.columns[1] = inv[1];
+        s.inverseTransform.columns[2] = inv[2];
+        s.inverseTransform.columns[3] = inv[3];
+        return s;
+    };
+    
+    // Sphere 1: Mirror sphere (left, highly reflective)
+    spheres[0] = make_sphere(1, -2.0, 1.0, 0, 0.8);
+    materials[0].color = white;
+    materials[0].ambient = 0.1;
+    materials[0].diffuse = 0.1;
+    materials[0].specular = 1.0;
+    materials[0].shininess = 300.0;
+    materials[0].reflective = 0.95;  // Almost perfect mirror
+    materials[0].transparency = 0.0;
+    materials[0].refractive_index = 1.0;
+    
+    // Sphere 2: Glass sphere (center, transparent)
+    spheres[1] = make_sphere(2, 0, 1.0, 0, 0.8);
+    materials[1].color = white;
+    materials[1].ambient = 0.05;
+    materials[1].diffuse = 0.05;
+    materials[1].specular = 1.0;
+    materials[1].shininess = 300.0;
+    materials[1].reflective = 0.1;  // Slight reflection
+    materials[1].transparency = 0.9;  // Mostly transparent
+    materials[1].refractive_index = 1.5;  // Glass
+    
+    // Sphere 3: Red sphere (right)
+    spheres[2] = make_sphere(3, 2.0, 1.0, 0, 0.8);
+    materials[2].color = red;
+    materials[2].ambient = 0.1;
+    materials[2].diffuse = 0.9;
+    materials[2].specular = 0.9;
+    materials[2].shininess = 200.0;
+    materials[2].reflective = 0.0;
+    materials[2].transparency = 0.0;
+    materials[2].refractive_index = 1.0;
+    
+    // Sphere 4: Green sphere (back left)
+    spheres[3] = make_sphere(4, -1.5, 0.5, 2.0, 0.6);
+    materials[3].color = green;
+    materials[3].ambient = 0.1;
+    materials[3].diffuse = 0.9;
+    materials[3].specular = 0.9;
+    materials[3].shininess = 200.0;
+    materials[3].reflective = 0.0;
+    materials[3].transparency = 0.0;
+    materials[3].refractive_index = 1.0;
+    
+    // Sphere 5: Blue sphere (back right)
+    spheres[4] = make_sphere(5, 1.5, 0.5, 2.0, 0.6);
+    materials[4].color = blue;
+    materials[4].ambient = 0.1;
+    materials[4].diffuse = 0.9;
+    materials[4].specular = 0.9;
+    materials[4].shininess = 200.0;
+    materials[4].reflective = 0.0;
+    materials[4].transparency = 0.0;
+    materials[4].refractive_index = 1.0;
+    
+    // Sphere 6: Yellow sphere (front)
+    spheres[5] = make_sphere(6, 0, 0.5, -1.5, 0.5);
+    materials[5].color = yellow;
+    materials[5].ambient = 0.1;
+    materials[5].diffuse = 0.9;
+    materials[5].specular = 0.9;
+    materials[5].shininess = 200.0;
+    materials[5].reflective = 0.0;
+    materials[5].transparency = 0.0;
+    materials[5].refractive_index = 1.0;
+    
+    // Find closest hit
+    float closest_t = 999999.0;
+    int hit_id = -1;
+    float4 hit_point, hit_normal;
+    
+    for (int i = 0; i < 6; i++) {
+        float t;
+        if (ray_sphere_intersect_detailed(ray, spheres[i], &t)) {
+            if (t > 0.001 && t < closest_t) {
+                closest_t = t;
+                hit_id = spheres[i].id;
+                hit_point = ray.origin + ray.direction * t;
+                hit_normal = sphere_normal_at_metal(spheres[i], hit_point);
+            }
+        }
+    }
+    
+    float4 color;
+    
+    if (hit_id != -1) {
+        int idx = hit_id - 1;
+        Sphere hit_sphere = spheres[idx];
+        Material hit_material = materials[idx];
+        
+        float4 eye = -ray.direction;
+        
+        // Base lighting
+        bool shadow = is_shadowed_metal(spheres, 6, light, hit_point);
+        float4 base_color = lighting_metal_shadow(hit_material, light, hit_point, eye, hit_normal, shadow);
+        
+        // Reflection (simplified - just one level)
+        float4 reflected = float4(0, 0, 0, 1);
+        if (hit_material.reflective > 0.0) {
+            float4 reflect_dir = reflect(ray.direction, hit_normal);
+            reflect_dir.w = 0.0;
+            reflect_dir = normalize(reflect_dir);
+            
+            Ray reflect_ray;
+            reflect_ray.origin = hit_point + hit_normal * 0.001;
+            reflect_ray.direction = reflect_dir;
+            
+            // Cast reflection ray and find what it hits
+            float reflect_closest = 999999.0;
+            int reflect_hit_id = -1;
+            float4 reflect_hit_point, reflect_hit_normal;
+            
+            for (int i = 0; i < 6; i++) {
+                float t;
+                if (ray_sphere_intersect_detailed(reflect_ray, spheres[i], &t)) {
+                    if (t > 0.001 && t < reflect_closest && i != idx) {  // Don't hit self
+                        reflect_closest = t;
+                        reflect_hit_id = spheres[i].id;
+                        reflect_hit_point = reflect_ray.origin + reflect_ray.direction * t;
+                        reflect_hit_normal = sphere_normal_at_metal(spheres[i], reflect_hit_point);
+                    }
+                }
+            }
+            
+            if (reflect_hit_id != -1) {
+                int ridx = reflect_hit_id - 1;
+                Material rmat = materials[ridx];
+                bool rshadow = is_shadowed_metal(spheres, 6, light, reflect_hit_point);
+                float4 reye = -reflect_ray.direction;
+                reflected = lighting_metal_shadow(rmat, light, reflect_hit_point, reye, reflect_hit_normal, rshadow);
+            } else {
+                // Sky reflection
+                reflected = float4(0.05, 0.05, 0.15, 1.0);
+            }
+        }
+        
+        // Combine: base + reflection
+        float refl = hit_material.reflective;
+        color = base_color * (1.0 - refl) + reflected * refl;
+        color.w = 1.0;
+    } else {
+        // Sky gradient
+        float t = float(gid.y) / float(vsize);
+        color = float4(0.05, 0.05, 0.15 + 0.1 * t, 1.0);
+    }
+    
+    output.write(color, gid);
+}
