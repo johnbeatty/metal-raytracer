@@ -68,15 +68,15 @@
         NSLog(@"Failed to created pipeline state, error %@", error);
     }
     
-    // Chapter 9: Create compute pipeline for hexagonal room demo
-    id<MTLFunction> computeFunction = [defaultLibrary newFunctionWithName:@"render_hexagonal_room"];
+    // Chapter 10: Create compute pipeline for patterns demo
+    id<MTLFunction> computeFunction = [defaultLibrary newFunctionWithName:@"render_patterns_demo"];
     if (computeFunction) {
         _computePipelineState = [_device newComputePipelineStateWithFunction:computeFunction error:&error];
         if (!_computePipelineState) {
             NSLog(@"Failed to create compute pipeline state: %@", error);
         }
     } else {
-        NSLog(@"Failed to find compute function 'render_hexagonal_room'");
+        NSLog(@"Failed to find compute function 'render_patterns_demo'");
     }
     
     // Chapter 5: Create texture for sphere rendering
@@ -141,7 +141,7 @@
     [commandBuffer commit];
     [commandBuffer waitUntilCompleted];
     
-    NSLog(@"Hexagonal room rendered to texture");
+    NSLog(@"Patterns demo rendered to texture");
 }
 
 - (void)drawInMTKView:(nonnull MTKView *)view

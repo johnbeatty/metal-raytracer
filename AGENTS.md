@@ -25,14 +25,16 @@ macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses 
 6. **Chapter 7**: World system, camera, multiple objects - 12 tests (WorldTests.m)
 7. **Chapter 8**: Shadow detection - 7 tests (ShadowTests.m)
 8. **Chapter 9**: Planes, hexagonal room demo - 8 tests (PlaneTests.m)
+9. **Chapter 10**: Patterns (stripes, gradient, ring, checker) - 19 tests (PatternTests.m)
 
 **Visual Progress:**
 - Started with simple red/green gradient (Chapter 5-6)
 - Added 3D shaded magenta sphere (Chapter 6)
 - Full 6-sphere scene with shadows (Chapter 7-8)
 - Hexagonal room with wood floor, viewed from above (Chapter 9)
+- Four spheres with different patterns: stripes, gradient, rings, checkers (Chapter 10)
 
-**Total: 109 tests passing** ✓
+**Total: 128 tests passing** ✓
 
 ## Build Commands
 
@@ -208,7 +210,6 @@ kernel void tuple_add(device const Tuple* a [[buffer(0)]],
 
 ## Next Chapters Available
 
-- Chapter 10: Patterns (stripes, gradients, rings, checkers)
 - Chapter 11: Reflection & Refraction (mirrors, glass)
 - Chapter 12: Cubes
 - Chapter 13: Cylinders
@@ -216,9 +217,9 @@ kernel void tuple_add(device const Tuple* a [[buffer(0)]],
 
 ## Current Working State
 
-- All 109 tests passing
-- Hexagonal room renders correctly (wood floor, 6 walls, viewed from above)
-- Ready to continue with Chapter 10 or user-directed improvements
+- All 128 tests passing
+- Four spheres with different patterns render correctly (stripes, gradient, rings, checkers)
+- Ready to continue with Chapter 11 or user-directed improvements
 
 ## Dependencies
 

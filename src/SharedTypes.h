@@ -173,6 +173,170 @@ typedef struct {
     200.0f                                 /* shininess */ \
 }
 
+// Chapter 10: Patterns
+
+// Pattern type enumeration
+typedef enum {
+    PATTERN_STRIPE = 0,
+    PATTERN_GRADIENT = 1,
+    PATTERN_RING = 2,
+    PATTERN_CHECKER = 3,
+    PATTERN_SOLID = 4  // No pattern, just use color a
+} PatternType;
+
+// SurfacePattern struct: defines a pattern for use in materials
+// Note: Named SurfacePattern to avoid conflict with macOS QuickDraw Pattern type
+typedef struct {
+    PatternType type;              // Type of pattern
+    vector_float4 a;               // First color
+    vector_float4 b;               // Second color
+    Matrix4x4 transform;           // Pattern transformation matrix
+    Matrix4x4 inverseTransform;    // Cached inverse of transform
+} SurfacePattern;
+
+#if !METAL_AVAILABLE
+// Helper: Create a stripe pattern (alternates in X)
+static inline SurfacePattern pattern_stripe(vector_float4 a, vector_float4 b) {
+    SurfacePattern p;
+    p.type = PATTERN_STRIPE;
+    p.a = a;
+    p.b = b;
+    p.transform = MATRIX4X4_IDENTITY;
+    p.inverseTransform = MATRIX4X4_IDENTITY;
+    return p;
+}
+
+// Helper: Create a gradient pattern (linear blend in X)
+static inline SurfacePattern pattern_gradient(vector_float4 a, vector_float4 b) {
+    SurfacePattern p;
+    p.type = PATTERN_GRADIENT;
+    p.a = a;
+    p.b = b;
+    p.transform = MATRIX4X4_IDENTITY;
+    p.inverseTransform = MATRIX4X4_IDENTITY;
+    return p;
+}
+
+// Helper: Create a ring pattern (concentric circles in XZ plane)
+static inline SurfacePattern pattern_ring(vector_float4 a, vector_float4 b) {
+    SurfacePattern p;
+    p.type = PATTERN_RING;
+    p.a = a;
+    p.b = b;
+    p.transform = MATRIX4X4_IDENTITY;
+    p.inverseTransform = MATRIX4X4_IDENTITY;
+    return p;
+}
+
+// Helper: Create a checker pattern (3D checkers)
+static inline SurfacePattern pattern_checker(vector_float4 a, vector_float4 b) {
+    SurfacePattern p;
+    p.type = PATTERN_CHECKER;
+    p.a = a;
+    p.b = b;
+    p.transform = MATRIX4X4_IDENTITY;
+    p.inverseTransform = MATRIX4X4_IDENTITY;
+    return p;
+}
+
+// Helper: Set pattern transform and compute inverse
+static inline void pattern_set_transform(SurfacePattern* pattern, Matrix4x4 transform) {
+    pattern->transform = transform;
+    matrix_float4x4 mat = matrix_from_columns(transform.columns[0], transform.columns[1],
+                                               transform.columns[2], transform.columns[3]);
+    matrix_float4x4 inv = matrix_invert(mat);
+    pattern->inverseTransform.columns[0] = inv.columns[0];
+    pattern->inverseTransform.columns[1] = inv.columns[1];
+    pattern->inverseTransform.columns[2] = inv.columns[2];
+    pattern->inverseTransform.columns[3] = inv.columns[3];
+}
+
+// Helper: Evaluate stripe pattern at a point
+static inline vector_float4 pattern_stripe_at(SurfacePattern pattern, vector_float4 point) {
+    // Alternates between a and b based on X coordinate
+    // Uses symmetric alternating pattern: [-1,0) mirrors [0,1), [-2,-1) mirrors [1,2), etc.
+    int stripe_index = (int)floorf(fabsf(point.x));
+    if (stripe_index % 2 == 0) {
+        return pattern.a;
+    } else {
+        return pattern.b;
+    }
+}
+
+// Helper: Evaluate gradient pattern at a point
+static inline vector_float4 pattern_gradient_at(SurfacePattern pattern, vector_float4 point) {
+    // Linear interpolation between a and b based on X coordinate
+    float distance = point.x - floorf(point.x);
+    vector_float4 result = pattern.a + (pattern.b - pattern.a) * distance;
+    result.w = 1.0;
+    return result;
+}
+
+// Helper: Evaluate ring pattern at a point
+static inline vector_float4 pattern_ring_at(SurfacePattern pattern, vector_float4 point) {
+    // Alternates based on distance from Y axis
+    float distance = sqrtf(point.x * point.x + point.z * point.z);
+    int ring_index = (int)floorf(distance);
+    if (ring_index % 2 == 0) {
+        return pattern.a;
+    } else {
+        return pattern.b;
+    }
+}
+
+// Helper: Evaluate checker pattern at a point
+static inline vector_float4 pattern_checker_at(SurfacePattern pattern, vector_float4 point) {
+    // 3D checkerboard pattern
+    int x_index = (int)floorf(point.x);
+    int y_index = (int)floorf(point.y);
+    int z_index = (int)floorf(point.z);
+    
+    if ((x_index + y_index + z_index) % 2 == 0) {
+        return pattern.a;
+    } else {
+        return pattern.b;
+    }
+}
+
+// Helper: Evaluate a pattern at a point (in pattern space)
+static inline vector_float4 pattern_at(SurfacePattern pattern, vector_float4 point) {
+    // Transform point to pattern space
+    matrix_float4x4 inv = matrix_from_columns(pattern.inverseTransform.columns[0],
+                                               pattern.inverseTransform.columns[1],
+                                               pattern.inverseTransform.columns[2],
+                                               pattern.inverseTransform.columns[3]);
+    vector_float4 pattern_point = matrix_multiply(inv, point);
+    
+    switch (pattern.type) {
+        case PATTERN_STRIPE:
+            return pattern_stripe_at(pattern, pattern_point);
+        case PATTERN_GRADIENT:
+            return pattern_gradient_at(pattern, pattern_point);
+        case PATTERN_RING:
+            return pattern_ring_at(pattern, pattern_point);
+        case PATTERN_CHECKER:
+            return pattern_checker_at(pattern, pattern_point);
+        case PATTERN_SOLID:
+        default:
+            return pattern.a;
+    }
+}
+
+// Helper: Get pattern color at a point on an object (includes object transform)
+// This transforms the point from world space to object space, then evaluates pattern
+static inline vector_float4 pattern_at_object(SurfacePattern pattern, Matrix4x4 object_inverse_transform, vector_float4 world_point) {
+    // First transform from world to object space
+    matrix_float4x4 obj_inv = matrix_from_columns(object_inverse_transform.columns[0],
+                                                   object_inverse_transform.columns[1],
+                                                   object_inverse_transform.columns[2],
+                                                   object_inverse_transform.columns[3]);
+    vector_float4 object_point = matrix_multiply(obj_inv, world_point);
+    
+    // Then evaluate pattern at that point
+    return pattern_at(pattern, object_point);
+}
+#endif /* !METAL_AVAILABLE */
+
 // PointLight type: a light source at a point in space
 typedef struct {
     vector_float4 position;    // Light position (point)
