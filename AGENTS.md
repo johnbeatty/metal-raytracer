@@ -30,6 +30,7 @@ macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses 
 9. **Chapter 10**: Patterns (stripes, gradient, ring, checker) - 19 tests (PatternTests.m)
 10. **Chapter 11**: Reflection & Refraction foundation - 15 tests (ReflectionRefractionTests.m)
 11. **Chapter 12**: Cubes - 24 tests (CubeTests.m)
+12. **Chapter 13**: Cylinders - 18 tests (CylinderTests.m)
 
 **Visual Progress:**
 - Started with simple red/green gradient (Chapter 5-6)
@@ -40,7 +41,7 @@ macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses 
 - **Animated reflection/refraction demo**: Mirror sphere, glass sphere, 4 colored spheres with smooth camera panning (Chapter 11)
 - **Cube room demo**: Wood room with table, box on table, scattered boxes (Chapter 12)
 
-**Total: 173 tests passing** ✓
+**Total: 191 tests passing** ✓
 
 ## Build Commands
 
@@ -216,16 +217,14 @@ kernel void tuple_add(device const Tuple* a [[buffer(0)]],
 
 ## Next Chapters Available
 
-- Chapter 13: Cylinders
 - Chapter 14: Groups (object hierarchies)
 
 ## Current Working State
 
-- All 173 tests passing
-- Cube geometry fully implemented (intersection, normals, transformations)
-- **Cube room demo complete**: Wood room with table, boxes on floor, red box on table
-- Real-time rendering with optimized lighting
-- Ready for Chapter 13: Cylinders or user-directed improvements
+- All 191 tests passing
+- Cylinder geometry fully implemented (intersection, normals, transformations, truncation, caps)
+- Cube room demo complete with table and boxes
+- Ready for Chapter 14: Groups or user-directed improvements
 
 ## Dependencies
 
