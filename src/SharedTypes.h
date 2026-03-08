@@ -137,22 +137,6 @@ typedef struct {
 // Maximum intersections per ray (for array sizing)
 #define MAX_INTERSECTIONS 16
 
-// Sphere type: unit sphere at origin with transform matrix
-typedef struct {
-    int id;                      // Unique identifier
-    Matrix4x4 transform;         // Transform from object space to world space
-    Matrix4x4 inverseTransform;  // Cached inverse for ray transformation
-} Sphere;
-
-// Chapter 9: Planes
-
-// Plane type: infinite plane at y=0 (can be transformed)
-typedef struct {
-    int id;                      // Unique identifier
-    Matrix4x4 transform;         // Transform from object space to world space
-    Matrix4x4 inverseTransform;  // Cached inverse for ray transformation
-} Plane;
-
 // Chapter 6: Light and Shading
 
 // Material type: describes how a surface reflects light
@@ -180,7 +164,22 @@ typedef struct {
     1.0f                                   /* refractive_index */ \
 }
 
-// Chapter 10: Patterns
+// Sphere type: unit sphere at origin with transform matrix
+typedef struct {
+    int id;                      // Unique identifier
+    Matrix4x4 transform;         // Transform from object space to world space
+    Matrix4x4 inverseTransform;  // Cached inverse for ray transformation
+    Material material;           // Surface material properties
+} Sphere;
+
+// Chapter 9: Planes
+
+// Plane type: infinite plane at y=0 (can be transformed)
+typedef struct {
+    int id;                      // Unique identifier
+    Matrix4x4 transform;         // Transform from object space to world space
+    Matrix4x4 inverseTransform;  // Cached inverse for ray transformation
+} Plane;
 
 // Pattern type enumeration
 typedef enum {
@@ -399,6 +398,7 @@ static inline Sphere sphere_create(int id) {
     s.id = id;
     s.transform = MATRIX4X4_IDENTITY;
     s.inverseTransform = MATRIX4X4_IDENTITY;
+    s.material = DEFAULT_MATERIAL;
     return s;
 }
 
@@ -808,8 +808,8 @@ static inline vector_float4 shade_hit(World world, Intersection hit, Ray ray) {
     // Check if point is in shadow
     int in_shadow = is_shadowed(world, point);
     
-    // Default material (white)
-    Material material = DEFAULT_MATERIAL;
+    // Use the sphere's material
+    Material material = hit_sphere.material;
     
     // Compute lighting with shadow
     return lighting_with_shadow(material, world.light, point, eye, normal, in_shadow);
@@ -831,6 +831,169 @@ static inline vector_float4 color_at(World world, Ray ray) {
     }
     
     return shade_hit(world, hit, ray);
+}
+
+// Chapter 11: Reflection and Refraction - Part 2
+
+// Maximum recursion depth for reflection/refraction
+#define MAX_RECURSION_DEPTH 5
+
+// Forward declarations for recursive shading
+static inline vector_float4 color_at_recursive(World world, Ray ray, int remaining);
+static inline vector_float4 reflected_color(World world, Intersection hit, Ray ray, int remaining);
+static inline vector_float4 refracted_color(World world, Intersection hit, Ray ray, int remaining);
+static inline vector_float4 shade_hit_recursive(World world, Intersection hit, Ray ray, int remaining);
+
+// Helper: Compute reflected color by casting a reflection ray
+// remaining: recursion depth remaining
+static inline vector_float4 reflected_color(World world, Intersection hit, Ray ray, int remaining) {
+    // Find the sphere that was hit first
+    Sphere hit_sphere;
+    int found = 0;
+    for (int i = 0; i < world.sphere_count; i++) {
+        if (world.spheres[i].id == hit.objectId) {
+            hit_sphere = world.spheres[i];
+            found = 1;
+            break;
+        }
+    }
+    
+    if (!found) {
+        return (vector_float4){0, 0, 0, 1};
+    }
+    
+    // Check if material is reflective and we haven't hit recursion limit
+    Material material = hit_sphere.material;
+    if (remaining <= 0 || material.reflective == 0.0f) {
+        return (vector_float4){0, 0, 0, 1};
+    }
+    
+    // Compute hit point and normal
+    vector_float4 point = ray_position(ray, hit.t);
+    vector_float4 normal = sphere_normal_at(hit_sphere, point);
+    
+    // Compute reflected direction
+    vector_float4 reflect_dir = reflect(ray.direction, normal);
+    reflect_dir.w = 0.0f;
+    reflect_dir = simd_normalize(reflect_dir);
+    
+    // Create reflection ray, offset slightly to avoid self-intersection
+    Ray reflect_ray;
+    reflect_ray.origin = point + normal * 0.001f;
+    reflect_ray.direction = reflect_dir;
+    
+    // Recursively trace the reflection ray
+    vector_float4 reflected = color_at_recursive(world, reflect_ray, remaining - 1);
+    
+    // Scale by material's reflectivity
+    return reflected * material.reflective;
+}
+
+// Helper: Compute refracted color by casting a refraction ray
+// remaining: recursion depth remaining  
+static inline vector_float4 refracted_color(World world, Intersection hit, Ray ray, int remaining) {
+    // Find the sphere that was hit first
+    Sphere hit_sphere;
+    int found = 0;
+    for (int i = 0; i < world.sphere_count; i++) {
+        if (world.spheres[i].id == hit.objectId) {
+            hit_sphere = world.spheres[i];
+            found = 1;
+            break;
+        }
+    }
+    
+    if (!found) {
+        return (vector_float4){0, 0, 0, 1};
+    }
+    
+    // Check if material is transparent and we haven't hit recursion limit
+    Material material = hit_sphere.material;
+    if (remaining <= 0 || material.transparency == 0.0f) {
+        return (vector_float4){0, 0, 0, 1};
+    }
+    
+    // Compute hit point and normal
+    vector_float4 point = ray_position(ray, hit.t);
+    vector_float4 normal = sphere_normal_at(hit_sphere, point);
+    
+    // Check if we're entering or exiting the object
+    // If ray direction and normal are on same side, we're exiting
+    float n1, n2;
+    if (simd_dot(ray.direction, normal) > 0) {
+        // Exiting: inside to outside
+        n1 = material.refractive_index;
+        n2 = 1.0f;  // Assuming air
+        normal = -normal;  // Flip normal
+    } else {
+        // Entering: outside to inside
+        n1 = 1.0f;  // Assuming air
+        n2 = material.refractive_index;
+    }
+    
+    // Compute refracted direction using Snell's law
+    vector_float4 refract_dir = refract(ray.direction, normal, n1, n2);
+    
+    // Check for total internal reflection
+    float dir_len = simd_length(refract_dir.xyz);
+    if (dir_len < 0.0001f) {
+        return (vector_float4){0, 0, 0, 1};  // Total internal reflection
+    }
+    
+    refract_dir = simd_normalize(refract_dir);
+    
+    // Create refraction ray, offset in direction of refraction to avoid self-intersection
+    Ray refract_ray;
+    refract_ray.origin = point - normal * 0.001f;  // Offset opposite to normal
+    refract_ray.direction = refract_dir;
+    
+    // Recursively trace the refraction ray
+    vector_float4 refracted = color_at_recursive(world, refract_ray, remaining - 1);
+    
+    // Scale by material's transparency
+    return refracted * material.transparency;
+}
+
+// Helper: Shade a hit point with recursive reflection and refraction
+// This combines base lighting with reflected and refracted colors
+static inline vector_float4 shade_hit_recursive(World world, Intersection hit, Ray ray, int remaining) {
+    // Get base color (surface lighting)
+    vector_float4 surface = shade_hit(world, hit, ray);
+    
+    // Get reflected color
+    vector_float4 reflected = reflected_color(world, hit, ray, remaining);
+    
+    // Get refracted color
+    vector_float4 refracted = refracted_color(world, hit, ray, remaining);
+    
+    // Combine: surface + reflected + refracted
+    vector_float4 result = surface + reflected + refracted;
+    result.w = 1.0f;
+    
+    return result;
+}
+
+// Helper: Compute color at a point in the world with recursion
+// remaining: recursion depth remaining (starts at MAX_RECURSION_DEPTH)
+static inline vector_float4 color_at_recursive(World world, Ray ray, int remaining) {
+    if (remaining <= 0) {
+        return (vector_float4){0, 0, 0, 1};  // Black at recursion limit
+    }
+    
+    Intersection intersections[MAX_INTERSECTIONS_TOTAL];
+    int count = intersect_world(world, ray, intersections);
+    
+    if (count == 0) {
+        return (vector_float4){0, 0, 0, 1};  // Black background
+    }
+    
+    Intersection hit = hit_from_array(intersections, count);
+    
+    if (hit.objectId == -1) {
+        return (vector_float4){0, 0, 0, 1};  // No hit
+    }
+    
+    return shade_hit_recursive(world, hit, ray, remaining);
 }
 
 // Chapter 8: Shadows

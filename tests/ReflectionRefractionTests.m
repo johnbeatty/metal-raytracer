@@ -199,4 +199,157 @@
     XCTAssertEqualWithAccuracy(glass.reflective, 0.9, 0.0001);
 }
 
+// MARK: - Recursive Shading Tests
+
+// Chapter 11 - The reflected color for a non-reflective material
+- (void)testReflectedColorForNonReflectiveMaterial {
+    // Create a world with default light
+    World world;
+    world.sphere_count = 0;
+    world.light = point_light_create((vector_float4){0, 0, -10, 1}, (vector_float4){1, 1, 1, 1});
+    
+    // Add a non-reflective sphere
+    Sphere s = sphere_create(1);
+    s.material = DEFAULT_MATERIAL;
+    s.material.reflective = 0.0;  // Non-reflective
+    world.spheres[world.sphere_count++] = s;
+    
+    // Create a ray that hits the sphere
+    Ray ray;
+    ray.origin = (vector_float4){0, 0, -5, 1};
+    ray.direction = (vector_float4){0, 0, 1, 0};
+    
+    // Create intersection
+    Intersection hit;
+    hit.t = 4.0;
+    hit.objectId = 1;
+    
+    // Get reflected color
+    vector_float4 reflected = reflected_color(world, hit, ray, MAX_RECURSION_DEPTH);
+    vector_float4 expected = {0, 0, 0, 1};
+    
+    XCTAssertTrue([self vector:reflected equalsVector:expected tolerance:0.0001]);
+}
+
+// Chapter 11 - The reflected color for a reflective material
+- (void)testReflectedColorForReflectiveMaterial {
+    // Create a world with default light
+    World world;
+    world.sphere_count = 0;
+    world.light = point_light_create((vector_float4){0, 0, -10, 1}, (vector_float4){1, 1, 1, 1});
+    
+    // Add a reflective sphere
+    Sphere s = sphere_create(1);
+    s.material = DEFAULT_MATERIAL;
+    s.material.reflective = 1.0;  // Perfect mirror
+    world.spheres[world.sphere_count++] = s;
+    
+    // Create a ray that hits the sphere
+    Ray ray;
+    ray.origin = (vector_float4){0, 0, -5, 1};
+    ray.direction = (vector_float4){0, 0, 1, 0};
+    
+    // Create intersection
+    Intersection hit;
+    hit.t = 4.0;
+    hit.objectId = 1;
+    
+    // Get reflected color - should be non-black (background color through reflection)
+    vector_float4 reflected = reflected_color(world, hit, ray, MAX_RECURSION_DEPTH);
+    
+    // For a perfect mirror on a sphere, reflecting black background
+    // The result should be scaled by reflectivity (1.0)
+    XCTAssertTrue(reflected.x >= 0.0 && reflected.x <= 1.0);
+    XCTAssertTrue(reflected.y >= 0.0 && reflected.y <= 1.0);
+    XCTAssertTrue(reflected.z >= 0.0 && reflected.z <= 1.0);
+}
+
+// Chapter 11 - The refracted color with an opaque surface (via refracted_color function)
+- (void)testRefractedColorFunctionWithOpaqueSurface {
+    // Create a world
+    World world;
+    world.sphere_count = 0;
+    world.light = point_light_create((vector_float4){0, 0, -10, 1}, (vector_float4){1, 1, 1, 1});
+    
+    // Add an opaque sphere
+    Sphere s = sphere_create(1);
+    s.material.reflective = 0.0;
+    s.material.transparency = 0.0;  // Opaque
+    world.spheres[world.sphere_count++] = s;
+    
+    // Create a ray that hits the sphere
+    Ray ray;
+    ray.origin = (vector_float4){0, 0, -5, 1};
+    ray.direction = (vector_float4){0, 0, 1, 0};
+    
+    // Create intersection
+    Intersection hit;
+    hit.t = 4.0;
+    hit.objectId = 1;
+    
+    // Get refracted color - should be black for opaque material
+    vector_float4 refracted = refracted_color(world, hit, ray, MAX_RECURSION_DEPTH);
+    vector_float4 expected = {0, 0, 0, 1};
+    
+    XCTAssertTrue([self vector:refracted equalsVector:expected tolerance:0.0001]);
+}
+
+// Chapter 11 - Shade hit with a reflective material
+- (void)testShadeHitWithReflectiveMaterial {
+    // Create a world
+    World world;
+    world.sphere_count = 0;
+    world.light = point_light_create((vector_float4){0, 0, -10, 1}, (vector_float4){1, 1, 1, 1});
+    
+    // Add a reflective sphere
+    Sphere s = sphere_create(1);
+    s.material = DEFAULT_MATERIAL;
+    s.material.reflective = 0.5;  // 50% reflective
+    world.spheres[world.sphere_count++] = s;
+    
+    // Create a ray that hits the sphere
+    Ray ray;
+    ray.origin = (vector_float4){0, 0, -5, 1};
+    ray.direction = (vector_float4){0, 0, 1, 0};
+    
+    // Create intersection
+    Intersection hit;
+    hit.t = 4.0;
+    hit.objectId = 1;
+    
+    // Get color with recursive shading
+    vector_float4 color = shade_hit_recursive(world, hit, ray, MAX_RECURSION_DEPTH);
+    
+    // Color should be a combination of surface color and reflected color
+    // Since it's 50% reflective, we should have some contribution from both
+    XCTAssertGreaterThan(color.x, 0.0);
+    XCTAssertGreaterThan(color.y, 0.0);
+    XCTAssertGreaterThan(color.z, 0.0);
+}
+
+// Chapter 11 - Sphere has material field
+- (void)testSphereHasMaterialField {
+    Sphere s = sphere_create(1);
+    
+    // Material should be initialized to DEFAULT_MATERIAL values
+    // DEFAULT_MATERIAL: ambient=0.1, reflective=0.0, transparency=0.0, refractive_index=1.0
+    XCTAssertEqualWithAccuracy(s.material.ambient, 0.1f, 0.0001);
+    XCTAssertEqualWithAccuracy(s.material.reflective, 0.0f, 0.0001);
+    XCTAssertEqualWithAccuracy(s.material.transparency, 0.0f, 0.0001);
+    XCTAssertEqualWithAccuracy(s.material.refractive_index, 1.0f, 0.0001);
+}
+
+// Chapter 11 - Can set sphere material
+- (void)testCanSetSphereMaterial {
+    Sphere s = sphere_create(1);
+    
+    s.material.reflective = 1.0;
+    s.material.transparency = 0.5;
+    s.material.refractive_index = REFRACTIVE_INDEX_GLASS;
+    
+    XCTAssertEqualWithAccuracy(s.material.reflective, 1.0, 0.0001);
+    XCTAssertEqualWithAccuracy(s.material.transparency, 0.5, 0.0001);
+    XCTAssertEqualWithAccuracy(s.material.refractive_index, 1.5, 0.0001);
+}
+
 @end
