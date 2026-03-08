@@ -162,6 +162,10 @@ typedef struct {
     float diffuse;              // Diffuse reflection coefficient (0-1)
     float specular;             // Specular reflection coefficient (0-1)
     float shininess;            // Shininess (higher = smaller, tighter specular highlight)
+    // Chapter 11: Reflection and Refraction
+    float reflective;           // Reflectivity (0 = no reflection, 1 = perfect mirror)
+    float transparency;         // Transparency (0 = opaque, 1 = fully transparent)
+    float refractive_index;     // Refractive index (1.0 = vacuum/air, 1.5 = glass, 2.417 = diamond)
 } Material;
 
 // Default material constant
@@ -170,7 +174,10 @@ typedef struct {
     0.1f,                                  /* ambient */ \
     0.9f,                                  /* diffuse */ \
     0.9f,                                  /* specular */ \
-    200.0f                                 /* shininess */ \
+    200.0f,                                /* shininess */ \
+    0.0f,                                  /* reflective */ \
+    0.0f,                                  /* transparency */ \
+    1.0f                                   /* refractive_index */ \
 }
 
 // Chapter 10: Patterns
@@ -432,6 +439,63 @@ static inline vector_float4 sphere_normal_at(Sphere sphere, vector_float4 point)
     world_normal.w = 0.0;  // Ensure it's a vector
     
     return simd_normalize(world_normal);
+}
+
+// Chapter 11: Reflection and Refraction
+
+// Helper: Reflect a vector around a normal
+// in: incoming vector (typically points toward surface)
+// normal: surface normal
+// Returns reflected vector pointing away from surface
+static inline vector_float4 reflect(vector_float4 in, vector_float4 normal) {
+    return in - normal * 2.0f * simd_dot(in, normal);
+}
+
+// Predefined refractive indices
+#define REFRACTIVE_INDEX_VACUUM 1.0f
+#define REFRACTIVE_INDEX_AIR 1.0f
+#define REFRACTIVE_INDEX_WATER 1.333f
+#define REFRACTIVE_INDEX_GLASS 1.5f
+#define REFRACTIVE_INDEX_DIAMOND 2.417f
+
+// Helper: Compute refracted vector using Snell's law
+// incident: incoming ray direction (normalized, pointing toward surface)
+// normal: surface normal (pointing away from surface)
+// n1: refractive index of source material
+// n2: refractive index of destination material
+// Returns refracted direction, or zero vector if total internal reflection occurs
+static inline vector_float4 refract(vector_float4 incident, vector_float4 normal, float n1, float n2) {
+    vector_float4 normalized_incident = simd_normalize(incident);
+    vector_float4 normalized_normal = simd_normalize(normal);
+    
+    float cos_theta1 = -simd_dot(normalized_incident, normalized_normal);
+    float sin_theta1_squared = 1.0f - cos_theta1 * cos_theta1;
+    
+    float n_ratio = n1 / n2;
+    float sin_theta2_squared = n_ratio * n_ratio * sin_theta1_squared;
+    
+    // Check for total internal reflection
+    if (sin_theta2_squared > 1.0f) {
+        return (vector_float4){0, 0, 0, 0};  // Zero vector indicates TIR
+    }
+    
+    float cos_theta2 = sqrtf(1.0f - sin_theta2_squared);
+    
+    // Refracted direction = (n1/n2) * incident + (n1/n2 * cos(theta1) - cos(theta2)) * normal
+    vector_float4 result = normalized_incident * n_ratio + 
+                          normalized_normal * (n_ratio * cos_theta1 - cos_theta2);
+    result.w = 0.0f;  // Ensure it's a vector
+    return result;
+}
+
+// Helper: Compute Fresnel effect (reflectance) using Schlick's approximation
+// This determines how much light is reflected vs refracted
+// cos_theta: cosine of angle between eye and normal
+// refractive_index: ratio of n1/n2 (source/destination)
+// Returns reflectance value (0-1), where 0 means all refracted, 1 means all reflected
+static inline float schlick(float cos_theta, float refractive_index) {
+    float r0 = powf((1.0f - refractive_index) / (1.0f + refractive_index), 2.0f);
+    return r0 + (1.0f - r0) * powf(1.0f - cos_theta, 5.0f);
 }
 
 // Helper: Compute lighting at a point using Phong reflection model

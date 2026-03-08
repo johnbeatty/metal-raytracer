@@ -65,6 +65,7 @@ set(TEST_SOURCES
     tests/ShadowTests.m
     tests/PlaneTests.m
     tests/PatternTests.m
+    tests/ReflectionRefractionTests.m
     tests/main.m
 )
 
