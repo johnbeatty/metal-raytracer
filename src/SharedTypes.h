@@ -181,6 +181,16 @@ typedef struct {
     Matrix4x4 inverseTransform;  // Cached inverse for ray transformation
 } Plane;
 
+// Chapter 12: Cubes
+
+// Cube type: unit cube centered at origin with faces at x=±1, y=±1, z=±1
+typedef struct {
+    int id;                      // Unique identifier
+    Matrix4x4 transform;         // Transform from object space to world space
+    Matrix4x4 inverseTransform;  // Cached inverse for ray transformation
+    Material material;           // Surface material properties
+} Cube;
+
 // Pattern type enumeration
 typedef enum {
     PATTERN_STRIPE = 0,
@@ -412,6 +422,30 @@ static inline void sphere_set_transform(Sphere* sphere, Matrix4x4 transform) {
     sphere->inverseTransform.columns[1] = inv.columns[1];
     sphere->inverseTransform.columns[2] = inv.columns[2];
     sphere->inverseTransform.columns[3] = inv.columns[3];
+}
+
+// Chapter 12: Cube helper functions
+
+// Helper: Create a cube with identity transform
+static inline Cube cube_create(int id) {
+    Cube c;
+    c.id = id;
+    c.transform = MATRIX4X4_IDENTITY;
+    c.inverseTransform = MATRIX4X4_IDENTITY;
+    c.material = DEFAULT_MATERIAL;
+    return c;
+}
+
+// Helper: Set cube transform and compute inverse
+static inline void cube_set_transform(Cube* cube, Matrix4x4 transform) {
+    cube->transform = transform;
+    matrix_float4x4 mat = matrix_from_columns(transform.columns[0], transform.columns[1], 
+                                              transform.columns[2], transform.columns[3]);
+    matrix_float4x4 inv = matrix_invert(mat);
+    cube->inverseTransform.columns[0] = inv.columns[0];
+    cube->inverseTransform.columns[1] = inv.columns[1];
+    cube->inverseTransform.columns[2] = inv.columns[2];
+    cube->inverseTransform.columns[3] = inv.columns[3];
 }
 
 // Chapter 6: Surface normals and lighting
@@ -734,6 +768,134 @@ static inline int intersect_plane(Plane plane, Ray ray, float* t) {
     }
     
     return 0;  // Intersection is behind the ray
+}
+
+// Chapter 12: Ray-cube intersection
+// A cube is bounded by 6 planes: x=±1, y=±1, z=±1
+// Returns the number of intersections (0, 1, or 2) and writes t values
+static inline int intersect_cube(Cube cube, Ray ray, float* t0_out, float* t1_out) {
+    // Transform ray to cube's object space
+    Ray object_ray = ray_transform(ray, cube.inverseTransform);
+    
+    vector_float4 origin = object_ray.origin;
+    vector_float4 direction = object_ray.direction;
+    
+    float min_t = -INFINITY;
+    float max_t = INFINITY;
+    
+    // Check each pair of parallel planes
+    // X planes: x = -1 and x = 1
+    if (fabs(direction.x) < 0.0001f) {
+        // Ray is parallel to x planes, check if it's between them
+        if (origin.x < -1.0f || origin.x > 1.0f) {
+            return 0;  // Ray is outside the slab
+        }
+    } else {
+        float tx0 = (-1.0f - origin.x) / direction.x;
+        float tx1 = (1.0f - origin.x) / direction.x;
+        if (tx0 > tx1) {
+            float temp = tx0;
+            tx0 = tx1;
+            tx1 = temp;
+        }
+        if (tx0 > min_t) min_t = tx0;
+        if (tx1 < max_t) max_t = tx1;
+        if (min_t > max_t) return 0;
+    }
+    
+    // Y planes: y = -1 and y = 1
+    if (fabs(direction.y) < 0.0001f) {
+        if (origin.y < -1.0f || origin.y > 1.0f) {
+            return 0;
+        }
+    } else {
+        float ty0 = (-1.0f - origin.y) / direction.y;
+        float ty1 = (1.0f - origin.y) / direction.y;
+        if (ty0 > ty1) {
+            float temp = ty0;
+            ty0 = ty1;
+            ty1 = temp;
+        }
+        if (ty0 > min_t) min_t = ty0;
+        if (ty1 < max_t) max_t = ty1;
+        if (min_t > max_t) return 0;
+    }
+    
+    // Z planes: z = -1 and z = 1
+    if (fabs(direction.z) < 0.0001f) {
+        if (origin.z < -1.0f || origin.z > 1.0f) {
+            return 0;
+        }
+    } else {
+        float tz0 = (-1.0f - origin.z) / direction.z;
+        float tz1 = (1.0f - origin.z) / direction.z;
+        if (tz0 > tz1) {
+            float temp = tz0;
+            tz0 = tz1;
+            tz1 = temp;
+        }
+        if (tz0 > min_t) min_t = tz0;
+        if (tz1 < max_t) max_t = tz1;
+        if (min_t > max_t) return 0;
+    }
+    
+    // We have valid intersection(s)
+    // Check which ones are in front of the ray (t > 0)
+    int count = 0;
+    
+    if (min_t > 0) {
+        *t0_out = min_t;
+        count = 1;
+    }
+    
+    if (max_t > 0 && max_t != min_t) {
+        if (count == 0) {
+            *t0_out = max_t;
+            count = 1;
+        } else {
+            *t1_out = max_t;
+            count = 2;
+        }
+    }
+    
+    return count;
+}
+
+// Chapter 12: Compute normal at a point on a cube
+// The normal points outward from the cube face that the point is on
+static inline vector_float4 cube_normal_at(Cube cube, vector_float4 point) {
+    // Transform point to cube's object space
+    matrix_float4x4 inv = matrix_from_columns(cube.inverseTransform.columns[0],
+                                               cube.inverseTransform.columns[1],
+                                               cube.inverseTransform.columns[2],
+                                               cube.inverseTransform.columns[3]);
+    vector_float4 object_point = matrix_multiply(inv, point);
+    
+    // Find the largest component to determine which face we're on
+    float abs_x = fabs(object_point.x);
+    float abs_y = fabs(object_point.y);
+    float abs_z = fabs(object_point.z);
+    
+    vector_float4 object_normal;
+    
+    if (abs_x >= abs_y && abs_x >= abs_z) {
+        // On an x face
+        object_normal = (vector_float4){object_point.x > 0 ? 1.0f : -1.0f, 0, 0, 0};
+    } else if (abs_y >= abs_x && abs_y >= abs_z) {
+        // On a y face
+        object_normal = (vector_float4){0, object_point.y > 0 ? 1.0f : -1.0f, 0, 0};
+    } else {
+        // On a z face
+        object_normal = (vector_float4){0, 0, object_point.z > 0 ? 1.0f : -1.0f, 0};
+    }
+    
+    // Transform normal back to world space
+    // For normals, we use the transpose of the inverse
+    matrix_float4x4 inv_transpose = matrix_transpose(inv);
+    vector_float4 world_normal = matrix_multiply(inv_transpose, object_normal);
+    world_normal.w = 0.0f;
+    
+    return simd_normalize(world_normal);
 }
 
 // Helper: Intersect ray with world, return all intersections
