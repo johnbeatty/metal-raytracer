@@ -38,7 +38,7 @@ macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses 
 - Four spheres with different patterns: stripes, gradient, rings, checkers (Chapter 10)
 - Reflection & refraction helpers implemented (Chapter 11)
 
-**Total: 143 tests passing** ✓
+**Total: 149 tests passing** ✓
 
 ## Build Commands
 
@@ -220,11 +220,13 @@ kernel void tuple_add(device const Tuple* a [[buffer(0)]],
 
 ## Current Working State
 
-- All 143 tests passing
-- Reflection & refraction helpers implemented (reflect, refract, schlick)
-- Material properties extended for reflective and transparent materials
-- Ready to implement recursive reflection/refraction shading (Part 2)
-- Ready for Chapter 12 or user-directed improvements
+- All 149 tests passing
+- Reflection & refraction fully implemented with recursive shading
+- Material struct extended with reflective, transparency, refractive_index fields
+- Sphere struct now has per-object material support
+- Recursive shading functions: color_at_recursive(), reflected_color(), refracted_color(), shade_hit_recursive()
+- Ready for demo scene with mirrors and glass spheres
+- Ready for Chapter 12: Cubes
 
 ## Dependencies
 
