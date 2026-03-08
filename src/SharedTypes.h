@@ -551,6 +551,60 @@ static inline int group_add_child(Group* group, int child_id, ShapeType child_ty
     return 1;  // Success
 }
 
+// Helper: Multiply two Matrix4x4 structures
+static inline Matrix4x4 matrix4x4_multiply(Matrix4x4 a, Matrix4x4 b) {
+    matrix_float4x4 ma = matrix_from_columns(a.columns[0], a.columns[1], a.columns[2], a.columns[3]);
+    matrix_float4x4 mb = matrix_from_columns(b.columns[0], b.columns[1], b.columns[2], b.columns[3]);
+    matrix_float4x4 result = matrix_multiply(ma, mb);
+    
+    Matrix4x4 r;
+    r.columns[0] = result.columns[0];
+    r.columns[1] = result.columns[1];
+    r.columns[2] = result.columns[2];
+    r.columns[3] = result.columns[3];
+    return r;
+}
+
+// Chapter 14: Hexagon model construction functions
+
+// Helper: Create a hexagon corner (sphere scaled 25%, translated -1 in z)
+static inline Sphere hexagon_corner(int id) {
+    Sphere corner = sphere_create(id);
+    
+    // Transform: scale by 25%, then translate -1 in z
+    // Remember: transformations are applied in reverse order when multiplying
+    // So translation * scaling means: scale first, then translate
+    Matrix4x4 scale = matrix_scaling(0.25f, 0.25f, 0.25f);
+    Matrix4x4 trans = matrix_translation(0.0f, 0.0f, -1.0f);
+    Matrix4x4 transform = matrix4x4_multiply(trans, scale);
+    
+    sphere_set_transform(&corner, transform);
+    return corner;
+}
+
+// Helper: Create a hexagon edge (cylinder with y bounds 0-1, scaled, rotated, translated)
+static inline Cylinder hexagon_edge(int id) {
+    Cylinder edge = cylinder_create(id);
+    
+    // Set cylinder bounds
+    edge.minimum = 0.0f;
+    edge.maximum = 1.0f;
+    
+    // Transform: scale 25% in x/z, rotate -π/2 in z, rotate -π/6 in y, translate -1 in z
+    // Applied in reverse order: translate * rotation_y * rotation_z * scale
+    Matrix4x4 scale = matrix_scaling(0.25f, 1.0f, 0.25f);
+    Matrix4x4 rot_z = matrix_rotation_z(-M_PI / 2.0f);
+    Matrix4x4 rot_y = matrix_rotation_y(-M_PI / 6.0f);
+    Matrix4x4 trans = matrix_translation(0.0f, 0.0f, -1.0f);
+    
+    Matrix4x4 t1 = matrix4x4_multiply(rot_z, scale);
+    Matrix4x4 t2 = matrix4x4_multiply(rot_y, t1);
+    Matrix4x4 transform = matrix4x4_multiply(trans, t2);
+    
+    cylinder_set_transform(&edge, transform);
+    return edge;
+}
+
 // Chapter 6: Surface normals and lighting
 
 // Helper: Compute normal vector at a point on a sphere

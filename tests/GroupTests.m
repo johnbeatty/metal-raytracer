@@ -145,4 +145,71 @@
     XCTAssertEqual(g.child_count, 0);
 }
 
+// MARK: - Hexagon Tests
+
+// Chapter 14 - Hexagon corner creates a sphere with correct transform
+- (void)testHexagonCorner {
+    Sphere corner = hexagon_corner(100);
+    
+    XCTAssertEqual(corner.id, 100);
+    
+    // The corner should be scaled by 25% and translated -1 in z
+    // Transform should be: translation(0, 0, -1) * scaling(0.25, 0.25, 0.25)
+    // Which means: scale first (0.25), then translate (-1 in z)
+    
+    // After scaling 0.25 and translating -1 in z, the scale should be 0.25
+    // and the translation z should be -1
+    // But since transform combines them, we check the combined transform
+    
+    // For a point at origin after transform:
+    // scale: (0, 0, 0) -> (0, 0, 0)
+    // then translate: (0, 0, -1)
+    vector_float4 origin = {0, 0, 0, 1};
+    matrix_float4x4 mat = matrix_from_columns(corner.transform.columns[0], 
+                                               corner.transform.columns[1],
+                                               corner.transform.columns[2],
+                                               corner.transform.columns[3]);
+    vector_float4 transformed = matrix_multiply(mat, origin);
+    
+    // Should be at (0, 0, -1) after transform
+    XCTAssertEqualWithAccuracy(transformed.x, 0.0f, 0.0001);
+    XCTAssertEqualWithAccuracy(transformed.y, 0.0f, 0.0001);
+    XCTAssertEqualWithAccuracy(transformed.z, -1.0f, 0.0001);
+}
+
+// Chapter 14 - Hexagon edge creates a cylinder with correct bounds
+- (void)testHexagonEdge {
+    Cylinder edge = hexagon_edge(101);
+    
+    XCTAssertEqual(edge.id, 101);
+    
+    // Cylinder should have bounds 0 to 1
+    XCTAssertEqualWithAccuracy(edge.minimum, 0.0f, 0.0001);
+    XCTAssertEqualWithAccuracy(edge.maximum, 1.0f, 0.0001);
+    
+    // Transform should exist (not identity)
+    // Check that it's different from identity by checking one element
+    XCTAssertTrue(edge.transform.columns[0].x != 1.0f || edge.transform.columns[3].z != 0.0f);
+}
+
+// Chapter 14 - Matrix multiply helper works correctly
+- (void)testMatrix4x4Multiply {
+    Matrix4x4 scale = matrix_scaling(2.0f, 2.0f, 2.0f);
+    Matrix4x4 trans = matrix_translation(1.0f, 2.0f, 3.0f);
+    
+    // trans * scale means: scale first, then translate
+    Matrix4x4 result = matrix4x4_multiply(trans, scale);
+    
+    // Check that scaling is applied
+    // Column 0 should be (2, 0, 0, 0) - scaled x
+    XCTAssertEqualWithAccuracy(result.columns[0].x, 2.0f, 0.0001);
+    XCTAssertEqualWithAccuracy(result.columns[0].y, 0.0f, 0.0001);
+    XCTAssertEqualWithAccuracy(result.columns[0].z, 0.0f, 0.0001);
+    
+    // Column 3 should have translation (1, 2, 3)
+    XCTAssertEqualWithAccuracy(result.columns[3].x, 1.0f, 0.0001);
+    XCTAssertEqualWithAccuracy(result.columns[3].y, 2.0f, 0.0001);
+    XCTAssertEqualWithAccuracy(result.columns[3].z, 3.0f, 0.0001);
+}
+
 @end
