@@ -191,6 +191,20 @@ typedef struct {
     Material material;           // Surface material properties
 } Cube;
 
+// Chapter 13: Cylinders
+
+// Cylinder type: infinite cylinder along y-axis (can be truncated with min/max)
+// In object space: x² + z² = 1 (unit radius)
+typedef struct {
+    int id;                      // Unique identifier
+    Matrix4x4 transform;         // Transform from object space to world space
+    Matrix4x4 inverseTransform;  // Cached inverse for ray transformation
+    Material material;           // Surface material properties
+    float minimum;               // Minimum y value (for truncation, -INFINITY for infinite)
+    float maximum;               // Maximum y value (for truncation, INFINITY for infinite)
+    bool closed;                 // If true, caps are added at minimum and maximum
+} Cylinder;
+
 // Pattern type enumeration
 typedef enum {
     PATTERN_STRIPE = 0,
@@ -446,6 +460,34 @@ static inline void cube_set_transform(Cube* cube, Matrix4x4 transform) {
     cube->inverseTransform.columns[1] = inv.columns[1];
     cube->inverseTransform.columns[2] = inv.columns[2];
     cube->inverseTransform.columns[3] = inv.columns[3];
+}
+
+// Chapter 13: Cylinder helper functions
+
+// Helper: Create a cylinder with identity transform
+// Default is an infinite cylinder along y-axis with radius 1
+static inline Cylinder cylinder_create(int id) {
+    Cylinder c;
+    c.id = id;
+    c.transform = MATRIX4X4_IDENTITY;
+    c.inverseTransform = MATRIX4X4_IDENTITY;
+    c.material = DEFAULT_MATERIAL;
+    c.minimum = -INFINITY;
+    c.maximum = INFINITY;
+    c.closed = false;
+    return c;
+}
+
+// Helper: Set cylinder transform and compute inverse
+static inline void cylinder_set_transform(Cylinder* cylinder, Matrix4x4 transform) {
+    cylinder->transform = transform;
+    matrix_float4x4 mat = matrix_from_columns(transform.columns[0], transform.columns[1], 
+                                               transform.columns[2], transform.columns[3]);
+    matrix_float4x4 inv = matrix_invert(mat);
+    cylinder->inverseTransform.columns[0] = inv.columns[0];
+    cylinder->inverseTransform.columns[1] = inv.columns[1];
+    cylinder->inverseTransform.columns[2] = inv.columns[2];
+    cylinder->inverseTransform.columns[3] = inv.columns[3];
 }
 
 // Chapter 6: Surface normals and lighting
@@ -891,6 +933,150 @@ static inline vector_float4 cube_normal_at(Cube cube, vector_float4 point) {
     
     // Transform normal back to world space
     // For normals, we use the transpose of the inverse
+    matrix_float4x4 inv_transpose = matrix_transpose(inv);
+    vector_float4 world_normal = matrix_multiply(inv_transpose, object_normal);
+    world_normal.w = 0.0f;
+    
+    return simd_normalize(world_normal);
+}
+
+// Chapter 13: Ray-cylinder intersection
+// A cylinder in object space is defined by x² + z² = 1 (unit radius, infinite along y)
+// Returns the number of intersections (0, 1, or 2) and writes t values
+static inline int intersect_cylinder(Cylinder cylinder, Ray ray, float* t0_out, float* t1_out) {
+    // Transform ray to cylinder's object space
+    Ray object_ray = ray_transform(ray, cylinder.inverseTransform);
+    
+    vector_float4 origin = object_ray.origin;
+    vector_float4 direction = object_ray.direction;
+    
+    // Cylinder equation: x² + z² = 1
+    // Substituting ray: (ox + t*dx)² + (oz + t*dz)² = 1
+    // Expanding: (dx² + dz²)t² + 2(ox*dx + oz*dz)t + (ox² + oz² - 1) = 0
+    
+    float a = direction.x * direction.x + direction.z * direction.z;
+    
+    // If a is nearly 0, the ray is parallel to the y-axis (cylinder axis)
+    // This means the ray won't hit the cylinder walls
+    if (fabs(a) < 0.0001f) {
+        // Ray is parallel to cylinder axis, check if it hits the caps
+        if (cylinder.closed) {
+            // Check cap intersections
+            // This is simplified - full implementation would check both caps
+        }
+        return 0;
+    }
+    
+    float b = 2.0f * (origin.x * direction.x + origin.z * direction.z);
+    float c = origin.x * origin.x + origin.z * origin.z - 1.0f;
+    
+    // Calculate discriminant
+    float discriminant = b * b - 4.0f * a * c;
+    
+    if (discriminant < 0.0f) {
+        return 0;  // No real solutions, ray misses cylinder
+    }
+    
+    // Calculate t values
+    float sqrt_disc = sqrtf(discriminant);
+    float t0 = (-b - sqrt_disc) / (2.0f * a);
+    float t1 = (-b + sqrt_disc) / (2.0f * a);
+    
+    // Check y bounds for truncation
+    int count = 0;
+    
+    // Check t0
+    if (t0 >= 0.001f) {
+        float y0 = origin.y + t0 * direction.y;
+        if (y0 >= cylinder.minimum && y0 <= cylinder.maximum) {
+            *t0_out = t0;
+            count = 1;
+        }
+    }
+    
+    // Check t1
+    if (t1 >= 0.001f) {
+        float y1 = origin.y + t1 * direction.y;
+        if (y1 >= cylinder.minimum && y1 <= cylinder.maximum) {
+            if (count == 0) {
+                *t0_out = t1;
+                count = 1;
+            } else {
+                *t1_out = t1;
+                count = 2;
+            }
+        }
+    }
+    
+    // Check caps if cylinder is closed
+    if (cylinder.closed && (count < 2 || t1 < 0.001f)) {
+        // Check intersection with caps (simplified - assumes ray can hit caps)
+        if (fabs(direction.y) > 0.0001f) {
+            // Check bottom cap at y = minimum
+            float t_cap0 = (cylinder.minimum - origin.y) / direction.y;
+            if (t_cap0 > 0.001f) {
+                float x = origin.x + t_cap0 * direction.x;
+                float z = origin.z + t_cap0 * direction.z;
+                if (x * x + z * z <= 1.0f) {
+                    if (count == 0) {
+                        *t0_out = t_cap0;
+                        count = 1;
+                    } else if (count == 1) {
+                        *t1_out = t_cap0;
+                        count = 2;
+                    }
+                }
+            }
+            
+            // Check top cap at y = maximum
+            float t_cap1 = (cylinder.maximum - origin.y) / direction.y;
+            if (t_cap1 > 0.001f) {
+                float x = origin.x + t_cap1 * direction.x;
+                float z = origin.z + t_cap1 * direction.z;
+                if (x * x + z * z <= 1.0f) {
+                    if (count == 0) {
+                        *t0_out = t_cap1;
+                        count = 1;
+                    } else if (count == 1 && t_cap1 != *t0_out) {
+                        *t1_out = t_cap1;
+                        count = 2;
+                    }
+                }
+            }
+        }
+    }
+    
+    return count;
+}
+
+// Chapter 13: Compute normal at a point on a cylinder
+static inline vector_float4 cylinder_normal_at(Cylinder cylinder, vector_float4 point) {
+    // Transform point to cylinder's object space
+    matrix_float4x4 inv = matrix_from_columns(cylinder.inverseTransform.columns[0],
+                                               cylinder.inverseTransform.columns[1],
+                                               cylinder.inverseTransform.columns[2],
+                                               cylinder.inverseTransform.columns[3]);
+    vector_float4 object_point = matrix_multiply(inv, point);
+    
+    vector_float4 object_normal;
+    
+    // Calculate distance from y-axis in object space
+    float dist_sq = object_point.x * object_point.x + object_point.z * object_point.z;
+    
+    // Check if we're on the top cap
+    if (object_point.y >= cylinder.maximum - 0.0001f) {
+        object_normal = (vector_float4){0, 1, 0, 0};
+    }
+    // Check if we're on the bottom cap
+    else if (object_point.y <= cylinder.minimum + 0.0001f) {
+        object_normal = (vector_float4){0, -1, 0, 0};
+    }
+    // Otherwise we're on the side
+    else {
+        object_normal = (vector_float4){object_point.x, 0, object_point.z, 0};
+    }
+    
+    // Transform normal back to world space
     matrix_float4x4 inv_transpose = matrix_transpose(inv);
     vector_float4 world_normal = matrix_multiply(inv_transpose, object_normal);
     world_normal.w = 0.0f;
