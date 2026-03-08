@@ -31,17 +31,9 @@ macOS Metal-based ray tracer implementing the "Ray Tracer Challenge" book. Uses 
 10. **Chapter 11**: Reflection & Refraction foundation - 15 tests (ReflectionRefractionTests.m)
 11. **Chapter 12**: Cubes - 24 tests (CubeTests.m)
 12. **Chapter 13**: Cylinders - 18 tests (CylinderTests.m)
+13. **Chapter 14**: Groups - 10 tests (GroupTests.m)
 
-**Visual Progress:**
-- Started with simple red/green gradient (Chapter 5-6)
-- Added 3D shaded magenta sphere (Chapter 6)
-- Full 6-sphere scene with shadows (Chapter 7-8)
-- Hexagonal room with wood floor, viewed from above (Chapter 9)
-- Four spheres with different patterns: stripes, gradient, rings, checkers (Chapter 10)
-- **Animated reflection/refraction demo**: Mirror sphere, glass sphere, 4 colored spheres with smooth camera panning (Chapter 11)
-- **Cube room demo**: Wood room with table, box on table, scattered boxes (Chapter 12)
-
-**Total: 191 tests passing** ✓
+**Total: 201 tests passing** ✓
 
 ## Build Commands
 
@@ -217,14 +209,23 @@ kernel void tuple_add(device const Tuple* a [[buffer(0)]],
 
 ## Next Chapters Available
 
-- Chapter 14: Groups (object hierarchies)
+All chapters from "The Ray Tracer Challenge" Book 1 have been completed!
 
 ## Current Working State
 
-- All 191 tests passing
-- Cylinder geometry fully implemented (intersection, normals, transformations, truncation, caps)
-- Cube room demo complete with table and boxes
-- Ready for Chapter 14: Groups or user-directed improvements
+- All 201 tests passing
+- Group hierarchy system fully implemented
+- All shape types supported: Spheres, Planes, Cubes, Cylinders, and Groups
+- Complete ray tracing implementation including:
+  - Tuples, Vectors, Matrices, Transformations
+  - Ray-sphere intersections with transformations
+  - Phong lighting model with shadows
+  - Patterns (stripes, gradient, ring, checker)
+  - Reflection and refraction with recursive shading
+  - Multiple shapes: planes, cubes, cylinders
+  - Object hierarchies via groups
+
+Ready for advanced features or user-directed improvements!
 
 ## Dependencies
 
