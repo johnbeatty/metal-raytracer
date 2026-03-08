@@ -82,8 +82,8 @@
     // Chapter 5: Create texture for sphere rendering
     MTLTextureDescriptor *textureDescriptor = [[MTLTextureDescriptor alloc] init];
     textureDescriptor.pixelFormat = MTLPixelFormatRGBA8Unorm;
-    textureDescriptor.width = 400;  // Increased for sharper image (was 100)
-    textureDescriptor.height = 400;
+    textureDescriptor.width = 1920;  // Full HD resolution (was 400)
+    textureDescriptor.height = 1080;
     textureDescriptor.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
     _sphereTexture = [_device newTextureWithDescriptor:textureDescriptor];
 }
@@ -131,9 +131,9 @@
     [computeEncoder setComputePipelineState:_computePipelineState];
     [computeEncoder setTexture:_sphereTexture atIndex:0];
     
-    // Dispatch 400x400 threads (one per pixel) - updated for higher resolution
+    // Dispatch 1920x1080 threads (one per pixel) - Full HD resolution
     MTLSize threadsPerThreadgroup = MTLSizeMake(16, 16, 1);
-    MTLSize threadgroups = MTLSizeMake((400 + 15) / 16, (400 + 15) / 16, 1);
+    MTLSize threadgroups = MTLSizeMake((1920 + 15) / 16, (1080 + 15) / 16, 1);
     
     [computeEncoder dispatchThreadgroups:threadgroups threadsPerThreadgroup:threadsPerThreadgroup];
     [computeEncoder endEncoding];

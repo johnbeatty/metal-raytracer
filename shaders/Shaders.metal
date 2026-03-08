@@ -645,9 +645,9 @@ kernel void render_sphere_shaded(texture2d<float, access::write> output [[ textu
 kernel void render_world_scene(texture2d<float, access::write> output [[ texture(0) ]],
                                uint2 gid [[ thread_position_in_grid ]])
 {
-    // Canvas size
-    const int hsize = 400;
-    const int vsize = 400;
+    // Canvas size - Full HD resolution
+    const int hsize = 1920;
+    const int vsize = 1080;
     
     // Check bounds
     if (gid.x >= hsize || gid.y >= vsize) {
